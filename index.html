@@ -8,13 +8,11 @@
   </head>
   <body>
     <div class="app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">ERP de bodega</p>
-          <h1>Jesunutri</h1>
-          <p class="subtitle">Inventario, vencimientos y trazabilidad de insumos</p>
-        </div>
-        <div class="actions">
+      <header class="topbar app-header">
+        <a class="brand-shell" href="./" aria-label="Jesunutri inicio">
+          <img class="header-logo" src="logo.png" alt="Jesunutri" width="360" height="120">
+        </a>
+        <div class="actions header-actions">
           <button class="btn primary" type="button" id="newEntryBtn">Nuevo ingreso</button>
           <button class="btn" type="button" id="bulkEntryBtn">Ingreso masivo</button>
           <button class="btn" type="button" id="importBtn">Importar desde foto/Excel</button>
@@ -25,26 +23,26 @@
 
       <main>
         <section class="dashboard-grid" aria-label="Resumen de inventario">
-          <article class="metric-card">
+          <button class="metric-card dashboard-card" type="button" data-detail="total">
             <span class="metric-label">Total insumos</span>
             <strong id="totalItems">0</strong>
             <small>Lotes con stock disponible</small>
-          </article>
-          <article class="metric-card warning">
+          </button>
+          <button class="metric-card dashboard-card warning" type="button" data-detail="soon">
             <span class="metric-label">Proximos a vencer</span>
             <strong id="soonItems">0</strong>
             <small>Vencen en 20 dias o menos</small>
-          </article>
-          <article class="metric-card danger">
+          </button>
+          <button class="metric-card dashboard-card danger" type="button" data-detail="expired">
             <span class="metric-label">Vencidos</span>
             <strong id="expiredItems">0</strong>
             <small>Requieren revision inmediata</small>
-          </article>
-          <article class="metric-card stock">
+          </button>
+          <button class="metric-card dashboard-card stock" type="button" data-detail="lowstock">
             <span class="metric-label">Bajo stock</span>
             <strong id="lowStockItems">0</strong>
             <small>Bajo minimo configurado</small>
-          </article>
+          </button>
         </section>
 
         <section class="panel alerts-panel">
@@ -78,10 +76,11 @@
                   <th>Cantidad</th>
                   <th>Unidad</th>
                   <th>Vencimiento</th>
+                  <th>Mes</th>
                   <th>Dias</th>
                   <th>Lote</th>
-                  <th>Proveedor</th>
                   <th>Estado</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="inventoryTable"></tbody>
@@ -91,20 +90,28 @@
       </main>
     </div>
 
+    <datalist id="productSuggestions"></datalist>
+
     <div class="modal-backdrop" id="entryModal" hidden>
       <section class="modal" role="dialog" aria-modal="true" aria-labelledby="entryModalTitle">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">Inventario</p>
-            <h2 id="entryModalTitle">Nuevo ingreso</h2>
-          </div>
-          <button class="icon-btn" type="button" id="closeEntryModal" aria-label="Cerrar">x</button>
-        </div>
-
         <form id="entryForm" class="entry-form">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow">Inventario</p>
+              <h2 id="entryModalTitle">Nuevo ingreso</h2>
+            </div>
+            <div class="modal-tools">
+              <label class="compact-date">
+                <span>Recepcion</span>
+                <input name="fecha_recepcion" type="date" required>
+              </label>
+              <button class="icon-btn" type="button" id="closeEntryModal" aria-label="Cerrar">x</button>
+            </div>
+          </div>
+
           <label>
             <span>Nombre del producto</span>
-            <input name="nombre" type="text" required placeholder="Ej: Harina fuerza">
+            <input name="nombre" type="text" list="productSuggestions" autocomplete="off" required placeholder="Ej: Harina fuerza">
           </label>
 
           <div class="form-grid">
@@ -126,27 +133,16 @@
             </label>
           </div>
 
-          <div class="form-grid">
-            <label>
-              <span>Fecha recepcion</span>
-              <input name="fecha_recepcion" type="date" required>
-            </label>
-            <label>
-              <span>Fecha vencimiento</span>
-              <input name="fecha_vencimiento" type="date">
-            </label>
-          </div>
+          <label>
+            <span>Fecha vencimiento</span>
+            <input name="fecha_vencimiento" type="date">
+            <small id="entryMonthPreview" class="month-preview"></small>
+          </label>
 
-          <div class="form-grid">
-            <label>
-              <span>Lote</span>
-              <input name="lote" type="text" placeholder="Opcional">
-            </label>
-            <label>
-              <span>Proveedor</span>
-              <input name="proveedor" type="text" placeholder="Opcional">
-            </label>
-          </div>
+          <label>
+            <span>Lote</span>
+            <input name="lote" type="text" placeholder="Opcional">
+          </label>
 
           <label>
             <span>Observaciones</span>
@@ -161,6 +157,71 @@
       </section>
     </div>
 
+    <div class="modal-backdrop" id="editModal" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+        <form id="editForm" class="entry-form">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow">Inventario</p>
+              <h2 id="editModalTitle">Editar ingreso</h2>
+              <p class="modal-copy" id="editProductName"></p>
+            </div>
+            <div class="modal-tools">
+              <label class="compact-date">
+                <span>Recepcion</span>
+                <input name="fecha_recepcion" type="date" required>
+              </label>
+              <button class="icon-btn" type="button" id="closeEditModal" aria-label="Cerrar">x</button>
+            </div>
+          </div>
+
+          <input name="lote_id" type="hidden">
+          <input name="producto_id" type="hidden">
+          <input name="cantidad_actual" type="hidden">
+
+          <div class="form-grid">
+            <label>
+              <span>Cantidad</span>
+              <input name="cantidad" type="number" min="0" step="0.001" required>
+            </label>
+            <label>
+              <span>Unidad</span>
+              <select name="unidad" required>
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="lt">lt</option>
+                <option value="ml">ml</option>
+                <option value="unidad">unidad</option>
+                <option value="caja">caja</option>
+                <option value="paquete">paquete</option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            <span>Fecha vencimiento</span>
+            <input name="fecha_vencimiento" type="date">
+            <small id="editMonthPreview" class="month-preview"></small>
+          </label>
+
+          <label>
+            <span>Lote</span>
+            <input name="lote" type="text">
+          </label>
+
+          <label>
+            <span>Observaciones</span>
+            <textarea name="observaciones" rows="3"></textarea>
+          </label>
+
+          <div class="form-actions">
+            <button class="btn" type="button" id="cancelEdit">Cancelar</button>
+            <button class="btn primary" type="submit" id="saveEditBtn">Guardar cambios</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div class="modal-backdrop" id="bulkModal" hidden>
       <section class="modal bulk-modal" role="dialog" aria-modal="true" aria-labelledby="bulkModalTitle">
         <div class="modal-header">
@@ -169,7 +230,13 @@
             <h2 id="bulkModalTitle">Ingreso masivo</h2>
             <p class="modal-copy">Puedes escribir directo o pegar filas desde Excel en la tabla.</p>
           </div>
-          <button class="icon-btn" type="button" id="closeBulkModal" aria-label="Cerrar">x</button>
+          <div class="modal-tools">
+            <label class="compact-date">
+              <span>Recepcion</span>
+              <input id="bulkReceiptDate" type="date">
+            </label>
+            <button class="icon-btn" type="button" id="closeBulkModal" aria-label="Cerrar">x</button>
+          </div>
         </div>
 
         <div class="bulk-error-list" id="bulkErrorList" hidden></div>
@@ -181,10 +248,9 @@
                 <th>Producto</th>
                 <th>Cantidad</th>
                 <th>Unidad</th>
-                <th>Fecha recepcion</th>
                 <th>Fecha vencimiento</th>
+                <th>Mes</th>
                 <th>Lote</th>
-                <th>Proveedor</th>
                 <th>Observaciones</th>
               </tr>
             </thead>
@@ -200,9 +266,41 @@
       </section>
     </div>
 
+    <div class="modal-backdrop" id="detailModal" hidden>
+      <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Detalle</p>
+            <h2 id="detailModalTitle">Detalle</h2>
+          </div>
+          <button class="icon-btn" type="button" id="closeDetailModal" aria-label="Cerrar">x</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Insumo</th>
+                <th>Cantidad</th>
+                <th>Unidad</th>
+                <th>Vencimiento</th>
+                <th>Mes</th>
+                <th>Dias</th>
+                <th>Lote</th>
+                <th>Observaciones</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="detailTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>
   </body>
 </html>
+
+
