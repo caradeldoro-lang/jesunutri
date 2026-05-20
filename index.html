@@ -1,448 +1,320 @@
-:root {
-  color-scheme: dark;
-  --bg: #090d14;
-  --panel: #111827;
-  --panel-soft: #151f2f;
-  --line: #243044;
-  --text: #edf3fb;
-  --muted: #96a3b6;
-  --blue: #4f8cff;
-  --green: #23c483;
-  --yellow: #f2c94c;
-  --orange: #f2994a;
-  --red: #ef5350;
-  --gray: #8792a2;
-  --shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
-}
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Jesunutri | Inventario</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar app-header">
+        <a class="brand-shell" href="./" aria-label="Jesunutri inicio">
+          <img class="header-logo" src="logo.png" alt="Jesunutri" width="360" height="120">
+        </a>
+        <div class="actions header-actions">
+          <button class="btn primary" type="button" id="newEntryBtn">Nuevo ingreso</button>
+          <button class="btn" type="button" id="bulkEntryBtn">Ingreso masivo</button>
+          <button class="btn" type="button" id="importBtn">Importar desde foto/Excel</button>
+        </div>
+      </header>
 
-* { box-sizing: border-box; }
+      <div class="error-box" id="errorBox" hidden></div>
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: radial-gradient(circle at top left, rgba(79, 140, 255, 0.16), transparent 34rem), linear-gradient(135deg, #090d14 0%, #0d1420 48%, #10151f 100%);
-  color: var(--text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
+      <main>
+        <section class="dashboard-grid" aria-label="Resumen de inventario">
+          <button class="metric-card dashboard-card" type="button" data-detail="total">
+            <span class="metric-label">Total insumos</span>
+            <strong id="totalItems">0</strong>
+            <small>Lotes con stock disponible</small>
+          </button>
+          <button class="metric-card dashboard-card warning" type="button" data-detail="soon">
+            <span class="metric-label">Proximos a vencer</span>
+            <strong id="soonItems">0</strong>
+            <small>Vencen en 20 dias o menos</small>
+          </button>
+          <button class="metric-card dashboard-card danger" type="button" data-detail="expired">
+            <span class="metric-label">Vencidos</span>
+            <strong id="expiredItems">0</strong>
+            <small>Requieren revision inmediata</small>
+          </button>
+          <button class="metric-card dashboard-card stock" type="button" data-detail="lowstock">
+            <span class="metric-label">Bajo stock</span>
+            <strong id="lowStockItems">0</strong>
+            <small>Bajo minimo configurado</small>
+          </button>
+        </section>
 
-button, input, select, textarea { font: inherit; }
+        <section class="panel alerts-panel">
+          <div class="section-heading">
+            <div>
+              <h2>Alertas de vencimiento</h2>
+              <p>Lotes vencidos o con fecha de vencimiento dentro de los proximos 20 dias.</p>
+            </div>
+            <span class="pill" id="alertCount">0 alertas</span>
+          </div>
+          <div class="alerts-list" id="alertsList"></div>
+        </section>
 
-.app-shell {
-  width: min(1180px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 32px 0 48px;
-}
+        <section class="panel inventory-panel">
+          <div class="section-heading table-heading">
+            <div>
+              <h2>Inventario</h2>
+              <p id="inventorySourceText">Cargando inventario desde Supabase.</p>
+            </div>
+            <label class="search-box">
+              <span>Buscar</span>
+              <input id="searchInput" type="search" placeholder="Nombre de insumo">
+            </label>
+          </div>
 
-.topbar, .section-heading, .modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Insumo</th>
+                  <th>Cantidad</th>
+                  <th>Unidad</th>
+                  <th>Vencimiento</th>
+                  <th>Mes</th>
+                  <th>Dias</th>
+                  <th>Lote</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
 
-.topbar.app-header {
-  min-height: 92px;
-  align-items: center;
-  margin-bottom: 22px;
-  padding: 8px 0 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
-}
+    <datalist id="productSuggestions"></datalist>
 
-.brand-shell {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  width: min(520px, 52vw);
-  min-height: 82px;
-  text-decoration: none;
-  animation: logoReveal 520ms ease-out both;
-  transition: transform 180ms ease, opacity 180ms ease;
-}
+    <div class="modal-backdrop" id="entryModal" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="entryModalTitle">
+        <form id="entryForm" class="entry-form">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow">Inventario</p>
+              <h2 id="entryModalTitle">Nuevo ingreso</h2>
+            </div>
+            <div class="modal-tools">
+              <label class="compact-date">
+                <span>Recepcion</span>
+                <input name="fecha_recepcion" type="date" required>
+              </label>
+              <button class="icon-btn" type="button" id="closeEntryModal" aria-label="Cerrar">x</button>
+            </div>
+          </div>
 
-.brand-shell:hover {
-  transform: translateY(-1px);
-}
+          <label>
+            <span>Nombre del producto</span>
+            <input name="nombre" type="text" list="productSuggestions" autocomplete="off" required placeholder="Ej: Harina fuerza">
+          </label>
 
-.header-logo {
-  display: block;
-  width: min(520px, 52vw);
-  height: clamp(76px, 8.5vw, 112px);
-  object-fit: contain;
-  object-position: left center;
-  filter:
-    drop-shadow(0 0 18px rgba(79, 140, 255, 0.13))
-    drop-shadow(0 12px 24px rgba(0, 0, 0, 0.18));
-  transition: transform 180ms ease, filter 180ms ease, opacity 180ms ease;
-}
+          <div class="form-grid">
+            <label>
+              <span>Cantidad</span>
+              <input name="cantidad" type="number" min="0.001" step="0.001" required placeholder="0">
+            </label>
+            <label>
+              <span>Unidad</span>
+              <select name="unidad" required>
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="lt">lt</option>
+                <option value="ml">ml</option>
+                <option value="unidad">unidad</option>
+                <option value="caja">caja</option>
+                <option value="paquete">paquete</option>
+              </select>
+            </label>
+          </div>
 
-.brand-shell:hover .header-logo {
-  transform: scale(1.006);
-  filter:
-    drop-shadow(0 0 22px rgba(79, 140, 255, 0.18))
-    drop-shadow(0 14px 28px rgba(0, 0, 0, 0.22));
-}
+          <label>
+            <span>Fecha vencimiento</span>
+            <input name="fecha_vencimiento" type="date">
+            <small id="entryMonthPreview" class="month-preview"></small>
+          </label>
 
-.header-actions {
-  align-items: center;
-}
+          <label>
+            <span>Lote</span>
+            <input name="lote" type="text" placeholder="Opcional">
+          </label>
 
-@keyframes logoReveal {
-  from {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
+          <label>
+            <span>Observaciones</span>
+            <textarea name="observaciones" rows="3" placeholder="Notas del ingreso"></textarea>
+          </label>
 
-.eyebrow {
-  margin: 0 0 8px;
-  color: var(--blue);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
+          <div class="form-actions">
+            <button class="btn" type="button" id="cancelEntry">Cancelar</button>
+            <button class="btn primary" type="submit" id="saveEntryBtn">Guardar ingreso</button>
+          </div>
+        </form>
+      </section>
+    </div>
 
-h1, h2, p { margin-top: 0; }
-h1 { margin-bottom: 8px; font-size: clamp(2.2rem, 5vw, 4.4rem); line-height: 0.95; }
-h2 { margin-bottom: 6px; font-size: 1.1rem; }
-.subtitle, .section-heading p, .metric-card small, .modal-copy { color: var(--muted); }
-.subtitle, .section-heading p, .modal-copy { margin-bottom: 0; }
+    <div class="modal-backdrop" id="editModal" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+        <form id="editForm" class="entry-form">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow">Inventario</p>
+              <h2 id="editModalTitle">Editar ingreso</h2>
+              <p class="modal-copy" id="editProductName"></p>
+            </div>
+            <div class="modal-tools">
+              <label class="compact-date">
+                <span>Recepcion</span>
+                <input name="fecha_recepcion" type="date" required>
+              </label>
+              <button class="icon-btn" type="button" id="closeEditModal" aria-label="Cerrar">x</button>
+            </div>
+          </div>
 
-.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+          <input name="lote_id" type="hidden">
+          <input name="producto_id" type="hidden">
+          <input name="cantidad_actual" type="hidden">
 
-.btn {
-  min-height: 42px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0 14px;
-  background: rgba(21, 31, 47, 0.82);
-  color: var(--text);
-  cursor: pointer;
-  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
-}
-.btn:hover { border-color: rgba(79, 140, 255, 0.8); background: rgba(31, 43, 63, 0.95); transform: translateY(-1px); }
-.btn.primary { border-color: transparent; background: var(--blue); color: #fff; font-weight: 700; }
-.btn.small { min-height: 32px; padding: 0 10px; font-size: 0.78rem; }
-.btn.danger-btn { border-color: rgba(239, 83, 80, 0.42); color: #ffc4c2; }
-.btn:disabled { cursor: wait; opacity: 0.64; transform: none; }
+          <div class="form-grid">
+            <label>
+              <span>Cantidad</span>
+              <input name="cantidad" type="number" min="0" step="0.001" required>
+            </label>
+            <label>
+              <span>Unidad</span>
+              <select name="unidad" required>
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="lt">lt</option>
+                <option value="ml">ml</option>
+                <option value="unidad">unidad</option>
+                <option value="caja">caja</option>
+                <option value="paquete">paquete</option>
+              </select>
+            </label>
+          </div>
 
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
-}
+          <label>
+            <span>Fecha vencimiento</span>
+            <input name="fecha_vencimiento" type="date">
+            <small id="editMonthPreview" class="month-preview"></small>
+          </label>
 
-.metric-card, .panel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(17, 24, 39, 0.86);
-  box-shadow: var(--shadow);
-}
+          <label>
+            <span>Lote</span>
+            <input name="lote" type="text">
+          </label>
 
-.metric-card {
-  position: relative;
-  overflow: hidden;
-  padding: 18px;
-  text-align: left;
-  color: var(--text);
-}
-.dashboard-card { cursor: pointer; }
-.dashboard-card:hover { border-color: rgba(79, 140, 255, 0.55); transform: translateY(-1px); }
-.metric-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--blue); }
-.metric-card.warning::before { background: var(--orange); }
-.metric-card.danger::before { background: var(--red); }
-.metric-card.stock::before { background: var(--yellow); }
-.metric-label { display: block; color: var(--muted); font-size: 0.82rem; }
-.metric-card strong { display: block; margin: 10px 0 4px; font-size: 2.1rem; line-height: 1; }
+          <label>
+            <span>Observaciones</span>
+            <textarea name="observaciones" rows="3"></textarea>
+          </label>
 
-.panel { margin-top: 16px; padding: 20px; }
-.section-heading { margin-bottom: 16px; }
+          <div class="form-actions">
+            <button class="btn" type="button" id="cancelEdit">Cancelar</button>
+            <button class="btn primary" type="submit" id="saveEditBtn">Guardar cambios</button>
+          </div>
+        </form>
+      </section>
+    </div>
 
-.pill, .status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  border-radius: 999px;
-  padding: 0 10px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.pill { background: rgba(79, 140, 255, 0.16); color: #bcd2ff; }
-.status.vencido { background: rgba(239, 83, 80, 0.14); color: #ffb8b6; }
-.status.proximo { background: rgba(242, 153, 74, 0.16); color: #ffd0a6; }
-.status.hoy { background: rgba(242, 201, 76, 0.16); color: #ffe48a; }
-.status.vigente { background: rgba(35, 196, 131, 0.14); color: #93f0c8; }
-.status.sin-fecha { background: rgba(135, 146, 162, 0.16); color: #d2d8e0; }
+    <div class="modal-backdrop" id="bulkModal" hidden>
+      <section class="modal bulk-modal" role="dialog" aria-modal="true" aria-labelledby="bulkModalTitle">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Inventario</p>
+            <h2 id="bulkModalTitle">Ingreso masivo</h2>
+            <p class="modal-copy">Puedes escribir directo o pegar filas desde Excel en la tabla.</p>
+          </div>
+          <div class="modal-tools">
+            <label class="compact-date">
+              <span>Recepcion</span>
+              <input id="bulkReceiptDate" type="date">
+            </label>
+            <button class="icon-btn" type="button" id="closeBulkModal" aria-label="Cerrar">x</button>
+          </div>
+        </div>
 
-.alerts-list { display: grid; gap: 10px; }
-.alert-card {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) repeat(5, auto);
-  align-items: center;
-  gap: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 14px;
-  background: rgba(21, 31, 47, 0.7);
-}
-.alert-title { font-weight: 800; }
-.alert-meta { color: var(--muted); font-size: 0.86rem; }
-.reviewed { color: var(--green); font-size: 0.82rem; font-weight: 700; }
+        <div class="bulk-error-list" id="bulkErrorList" hidden></div>
 
-.search-box { display: grid; gap: 6px; min-width: 240px; color: var(--muted); font-size: 0.8rem; }
-.search-box input, .entry-form input, .entry-form select, .entry-form textarea, .compact-date input, .bulk-input {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  outline: none;
-  background: #0b1220;
-  color: var(--text);
-}
-.search-box input { min-height: 40px; padding: 0 12px; }
-.search-box input:focus, .entry-form input:focus, .entry-form select:focus, .entry-form textarea:focus, .compact-date input:focus, .bulk-input:focus { border-color: var(--blue); }
+        <div class="bulk-table-wrap">
+          <table class="bulk-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Unidad</th>
+                <th>Fecha vencimiento</th>
+                <th>Mes</th>
+                <th>Lote</th>
+                <th>Observaciones</th>
+              </tr>
+            </thead>
+            <tbody id="bulkTableBody"></tbody>
+          </table>
+        </div>
 
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; min-width: 980px; }
-th, td { border-bottom: 1px solid var(--line); padding: 13px 12px; text-align: left; vertical-align: middle; }
-th { color: var(--muted); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; }
-tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
-.row-actions { display: flex; gap: 8px; }
+        <div class="form-actions">
+          <button class="btn" type="button" id="addBulkRow">Agregar fila</button>
+          <button class="btn" type="button" id="cancelBulk">Cancelar</button>
+          <button class="btn primary" type="button" id="saveBulkBtn">Guardar filas validas</button>
+        </div>
+      </section>
+    </div>
 
-.month-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #eef5ff;
-  font-size: 0.82rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-.month-badge.no-month { color: #9aa6b8; font-weight: 700; }
-.month-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  display: inline-block;
-  flex: 0 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.36);
-}
-.month-1 { background: #0066FF; }
-.month-2 { background: #00D9FF; }
-.month-3 { background: #00FF66; }
-.month-4 { background: #99FF00; }
-.month-5 { background: #FFD500; }
-.month-6 { background: #FF7A00; }
-.month-7 { background: #FF0000; }
-.month-8 { background: #FF00AA; }
-.month-9 { background: #7A00FF; }
-.month-10 { background: #B000FF; }
-.month-11 { background: #6B3E00; }
-.month-12 { background: #BFC7D5; }
-.month-preview { min-height: 24px; display: inline-flex; align-items: center; margin-top: 2px; }
-
-.empty { border: 1px dashed var(--line); border-radius: 8px; padding: 18px; color: var(--muted); text-align: center; }
-.error-box {
-  border: 1px solid rgba(239, 83, 80, 0.55);
-  border-radius: 8px;
-  margin-bottom: 16px;
-  padding: 12px 14px;
-  background: rgba(239, 83, 80, 0.12);
-  color: #ffc4c2;
-}
-
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background: rgba(5, 8, 13, 0.72);
-  backdrop-filter: blur(10px);
-}
-.modal-backdrop[hidden] { display: none; }
-.modal {
-  width: min(680px, 100%);
-  max-height: min(760px, calc(100vh - 40px));
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #111827;
-  box-shadow: var(--shadow);
-  padding: 20px;
-}
-.bulk-modal, .detail-modal { width: min(1120px, 100%); }
-.modal-header { margin-bottom: 18px; }
-.modal-tools { display: flex; align-items: flex-start; gap: 10px; }
-.compact-date { display: grid; gap: 4px; color: var(--muted); font-size: 0.76rem; }
-.compact-date input { width: 150px; min-height: 34px; padding: 0 8px; }
-.icon-btn {
-  display: inline-grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(21, 31, 47, 0.82);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.entry-form { display: grid; gap: 14px; }
-.entry-form label { display: grid; gap: 7px; color: var(--muted); font-size: 0.84rem; }
-.entry-form input, .entry-form select, .entry-form textarea { width: 100%; min-height: 42px; padding: 0 12px; }
-.entry-form textarea { min-height: 86px; padding-top: 10px; resize: vertical; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
-
-.bulk-table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
-.bulk-table { min-width: 980px; }
-.bulk-table th, .bulk-table td { padding: 8px; }
-.bulk-input { width: 100%; min-height: 36px; border-radius: 6px; padding: 0 8px; }
-.row-invalid { background: rgba(239, 83, 80, 0.08); }
-.row-invalid .bulk-input { border-color: rgba(239, 83, 80, 0.7); }
-.bulk-row-error { min-width: 220px; color: #ffc4c2; font-size: 0.78rem; }
-.bulk-error-list {
-  display: grid;
-  gap: 6px;
-  border: 1px solid rgba(239, 83, 80, 0.55);
-  border-radius: 8px;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  background: rgba(239, 83, 80, 0.12);
-  color: #ffc4c2;
-  font-size: 0.86rem;
-}
-.bulk-error-list[hidden] { display: none; }
-
-.toast {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 30;
-  max-width: 320px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px 14px;
-  background: #111827;
-  color: var(--text);
-  box-shadow: var(--shadow);
-  opacity: 0;
-  transform: translateY(12px);
-  pointer-events: none;
-  transition: opacity 180ms ease, transform 180ms ease;
-}
-.toast.show { opacity: 1; transform: translateY(0); }
-
-@media (max-width: 920px) {
-  .topbar, .section-heading { display: grid; }
-  .topbar.app-header { min-height: auto; align-items: center; justify-items: start; }
-  .brand-shell { width: min(420px, 86vw); min-height: 70px; }
-  .header-logo { width: min(420px, 86vw); height: clamp(66px, 15vw, 88px); }
-  .actions { justify-content: flex-start; }
-  .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .alert-card { grid-template-columns: 1fr; align-items: start; }
-}
-
-@media (max-width: 620px) {
-  .app-shell { width: min(100% - 20px, 1180px); padding-top: 14px; }
-  .topbar.app-header { gap: 12px; padding-bottom: 12px; }
-  .brand-shell { width: 100%; min-height: 58px; }
-  .header-logo { width: min(310px, 82vw); height: clamp(54px, 16vw, 74px); }
-  .dashboard-grid, .form-grid { grid-template-columns: 1fr; }
-  .actions, .btn, .search-box, .form-actions { width: 100%; }
-  .form-actions { display: grid; }
-  .modal-header, .modal-tools { display: grid; }
-}
+    <div class="modal-backdrop" id="detailModal" hidden>
+      <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Detalle</p>
+            <h2 id="detailModalTitle">Detalle</h2>
+          </div>
+          <button class="icon-btn" type="button" id="closeDetailModal" aria-label="Cerrar">x</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Insumo</th>
+                <th>Cantidad</th>
+                <th>Unidad</th>
+                <th>Vencimiento</th>
+                <th>Mes</th>
+                <th>Dias</th>
+                <th>Lote</th>
+                <th>Observaciones</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="detailTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
 
 
+    <div class="modal-backdrop system-modal-backdrop" id="systemModal" hidden>
+      <section class="modal system-modal" role="dialog" aria-modal="true" aria-labelledby="systemModalTitle">
+        <div class="system-modal-icon" id="systemModalIcon">!</div>
+        <div class="system-modal-content">
+          <h2 id="systemModalTitle">Confirmar accion</h2>
+          <p id="systemModalMessage"></p>
+          <div class="form-actions system-modal-actions">
+            <button class="btn" type="button" id="systemModalCancel">Cancelar</button>
+            <button class="btn danger-action" type="button" id="systemModalConfirm">Eliminar</button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
 
 
-.system-modal-backdrop {
-  opacity: 0;
-  transition: opacity 160ms ease;
-}
-
-.system-modal-backdrop.is-open {
-  opacity: 1;
-}
-
-.system-modal {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 16px;
-  width: min(460px, 100%);
-  transform: translateY(8px) scale(0.98);
-  transition: transform 180ms ease, opacity 180ms ease;
-}
-
-.system-modal-backdrop.is-open .system-modal {
-  transform: translateY(0) scale(1);
-}
-
-.system-modal-icon {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  background: rgba(255, 122, 0, 0.16);
-  color: #ffb15c;
-  border: 1px solid rgba(255, 122, 0, 0.38);
-  font-weight: 900;
-  font-size: 1.1rem;
-}
-
-.system-modal-icon.success {
-  background: rgba(35, 196, 131, 0.14);
-  color: #93f0c8;
-  border-color: rgba(35, 196, 131, 0.34);
-}
-
-.system-modal-icon.error {
-  background: rgba(239, 83, 80, 0.14);
-  color: #ffc4c2;
-  border-color: rgba(239, 83, 80, 0.4);
-}
-
-.system-modal-content h2 {
-  margin-bottom: 8px;
-  font-size: 1.15rem;
-}
-
-.system-modal-content p {
-  margin-bottom: 18px;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-.danger-action {
-  border-color: rgba(239, 83, 80, 0.55);
-  background: rgba(239, 83, 80, 0.95);
-  color: #fff;
-  font-weight: 800;
-}
-
-.danger-action:hover {
-  border-color: rgba(239, 83, 80, 0.95);
-  background: #ff3330;
-}
-
-.toast {
-  display: grid;
-  gap: 4px;
-}
-
-.toast.success {
-  border-color: rgba(35, 196, 131, 0.35);
-}
-
-.toast.error {
-  border-color: rgba(239, 83, 80, 0.45);
-}
