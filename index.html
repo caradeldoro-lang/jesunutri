@@ -10,7 +10,7 @@
     <div class="app-shell">
       <header class="topbar app-header">
         <a class="brand-shell" href="./" aria-label="Jesunutri inicio">
-          <img class="header-logo" "logo.png" alt="Jesunutri" width="360" height="120">
+          <img class="header-logo" src="logo.png" alt="Jesunutri" width="360" height="120">
         </a>
         <div class="actions header-actions">
           <button class="btn primary" type="button" id="newEntryBtn">Nuevo ingreso</button>
@@ -296,11 +296,27 @@
       </section>
     </div>
 
+
+    <div class="modal-backdrop system-modal-backdrop" id="systemModal" hidden>
+      <section class="modal system-modal" role="dialog" aria-modal="true" aria-labelledby="systemModalTitle">
+        <div class="system-modal-icon" id="systemModalIcon">!</div>
+        <div class="system-modal-content">
+          <h2 id="systemModalTitle">Confirmar accion</h2>
+          <p id="systemModalMessage"></p>
+          <div class="form-actions system-modal-actions">
+            <button class="btn" type="button" id="systemModalCancel">Cancelar</button>
+            <button class="btn danger-action" type="button" id="systemModalConfirm">Eliminar</button>
+          </div>
+        </div>
+      </section>
+    </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>
   </body>
 </html>
+
+
 
 
