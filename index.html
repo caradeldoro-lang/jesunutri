@@ -1,0 +1,116 @@
+﻿<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Jesunutri | Inventario</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">ERP de bodega</p>
+          <h1>Jesunutri</h1>
+          <p class="subtitle">Inventario, vencimientos y trazabilidad de insumos</p>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="button" id="newEntryBtn">Nuevo ingreso</button>
+          <button class="btn" type="button" id="bulkEntryBtn">Ingreso masivo</button>
+          <button class="btn" type="button" id="importBtn">Importar desde foto/Excel</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="dashboard-grid" aria-label="Resumen de inventario">
+          <article class="metric-card">
+            <span class="metric-label">Total insumos</span>
+            <strong id="totalItems">0</strong>
+            <small>Lotes con stock disponible</small>
+          </article>
+          <article class="metric-card warning">
+            <span class="metric-label">Proximos a vencer</span>
+            <strong id="soonItems">0</strong>
+            <small>Vencen en 20 dias o menos</small>
+          </article>
+          <article class="metric-card danger">
+            <span class="metric-label">Vencidos</span>
+            <strong id="expiredItems">0</strong>
+            <small>Requieren revision inmediata</small>
+          </article>
+          <article class="metric-card stock">
+            <span class="metric-label">Bajo stock</span>
+            <strong id="lowStockItems">0</strong>
+            <small>Bajo minimo configurado</small>
+          </article>
+        </section>
+
+        <section class="panel alerts-panel">
+          <div class="section-heading">
+            <div>
+              <h2>Alertas de vencimiento</h2>
+              <p>Lotes vencidos o con fecha de vencimiento dentro de los proximos 20 dias.</p>
+            </div>
+            <span class="pill" id="alertCount">0 alertas</span>
+          </div>
+          <div class="alerts-list" id="alertsList"></div>
+        </section>
+
+        <section class="panel inventory-panel">
+          <div class="section-heading table-heading">
+            <div>
+              <h2>Inventario</h2>
+              <p>Vista inicial con datos mock. El stock real debe venir desde movimientos.</p>
+            </div>
+            <label class="search-box">
+              <span>Buscar</span>
+              <input id="searchInput" type="search" placeholder="Nombre de insumo">
+            </label>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Insumo</th>
+                  <th>Cantidad</th>
+                  <th>Unidad</th>
+                  <th>Vencimiento</th>
+                  <th>Dias</th>
+                  <th>Lote</th>
+                  <th>Proveedor</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel docs-panel">
+          <div class="section-heading">
+            <div>
+              <h2>Documentacion del proyecto</h2>
+              <p>Base funcional, tecnica y SQL para iniciar el desarrollo.</p>
+            </div>
+          </div>
+          <div class="docs-grid">
+            <a href="docs/00_indice_sistema.md">Indice del sistema</a>
+            <a href="docs/01_requerimientos_funcionales.md">Requerimientos funcionales</a>
+            <a href="docs/02_modelo_datos.md">Modelo de datos</a>
+            <a href="docs/03_reglas_negocio.md">Reglas de negocio</a>
+            <a href="docs/04_flujos_pantallas.md">Flujos y pantallas</a>
+            <a href="docs/05_criterios_aceptacion.md">Criterios de aceptacion</a>
+            <a href="docs/07_roles_seguridad_auditoria.md">Roles, seguridad y auditoria</a>
+            <a href="docs/08_roadmap_futuro.md">Roadmap futuro</a>
+            <a href="supabase/06_sql_base_supabase.sql">SQL base Supabase</a>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
