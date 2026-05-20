@@ -21,6 +21,8 @@
         </div>
       </header>
 
+      <div class="error-box" id="errorBox" hidden></div>
+
       <main>
         <section class="dashboard-grid" aria-label="Resumen de inventario">
           <article class="metric-card">
@@ -60,7 +62,7 @@
           <div class="section-heading table-heading">
             <div>
               <h2>Inventario</h2>
-              <p>Vista inicial con datos mock. El stock real debe venir desde movimientos.</p>
+              <p id="inventorySourceText">Cargando inventario desde Supabase.</p>
             </div>
             <label class="search-box">
               <span>Buscar</span>
@@ -89,12 +91,80 @@
       </main>
     </div>
 
+    <div class="modal-backdrop" id="entryModal" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="entryModalTitle">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Inventario</p>
+            <h2 id="entryModalTitle">Nuevo ingreso</h2>
+          </div>
+          <button class="icon-btn" type="button" id="closeEntryModal" aria-label="Cerrar">x</button>
+        </div>
+
+        <form id="entryForm" class="entry-form">
+          <label>
+            <span>Nombre del producto</span>
+            <input name="nombre" type="text" required placeholder="Ej: Harina fuerza">
+          </label>
+
+          <div class="form-grid">
+            <label>
+              <span>Cantidad</span>
+              <input name="cantidad" type="number" min="0.001" step="0.001" required placeholder="0">
+            </label>
+            <label>
+              <span>Unidad</span>
+              <select name="unidad" required>
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="lt">lt</option>
+                <option value="ml">ml</option>
+                <option value="unidad">unidad</option>
+                <option value="caja">caja</option>
+                <option value="paquete">paquete</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="form-grid">
+            <label>
+              <span>Fecha recepcion</span>
+              <input name="fecha_recepcion" type="date" required>
+            </label>
+            <label>
+              <span>Fecha vencimiento</span>
+              <input name="fecha_vencimiento" type="date">
+            </label>
+          </div>
+
+          <div class="form-grid">
+            <label>
+              <span>Lote</span>
+              <input name="lote" type="text" placeholder="Opcional">
+            </label>
+            <label>
+              <span>Proveedor</span>
+              <input name="proveedor" type="text" placeholder="Opcional">
+            </label>
+          </div>
+
+          <label>
+            <span>Observaciones</span>
+            <textarea name="observaciones" rows="3" placeholder="Notas del ingreso"></textarea>
+          </label>
+
+          <div class="form-actions">
+            <button class="btn" type="button" id="cancelEntry">Cancelar</button>
+            <button class="btn primary" type="submit" id="saveEntryBtn">Guardar ingreso</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>
   </body>
 </html>
-
-
 
