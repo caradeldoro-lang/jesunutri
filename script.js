@@ -1,4 +1,13 @@
-﻿const DAY_MS = 24 * 60 * 60 * 1000;
+const SUPABASE_URL = "https://wsnnhczdhiysghstplki.supabase.co";
+
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indzbm5oY3pkaGl5c2doc3RwbGtpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDU3ODYsImV4cCI6MjA5NDg4MTc4Nn0.wDawAny58YsXgNgPaV6oKzQD4QdFdLYO8vomVFVKGAQ";
+
+const supabaseClient = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const formatIsoDate = (date) => date.toISOString().slice(0, 10);
 
@@ -310,3 +319,13 @@ document.getElementById("importBtn").addEventListener("click", () => {
 });
 
 render();
+async function testConnection() {
+  const { data, error } = await supabaseClient
+    .from("productos_insumos")
+    .select("*");
+
+  console.log("DATA:", data);
+  console.log("ERROR:", error);
+}
+
+testConnection();
