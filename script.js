@@ -9,6 +9,17 @@ const supabaseClient = supabase.createClient(
 );
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const BULK_COLUMNS = [
+  "nombre",
+  "cantidad",
+  "unidad",
+  "fecha_recepcion",
+  "fecha_vencimiento",
+  "lote",
+  "proveedor",
+  "observaciones"
+];
+const UNIT_OPTIONS = ["kg", "g", "lt", "ml", "unidad", "caja", "paquete"];
 
 const formatIsoDate = (date) => date.toISOString().slice(0, 10);
 
@@ -61,48 +72,6 @@ const mockInventory = [
     observaciones: "Prioridad de consumo",
     stockMinimo: 10,
     revisada: false
-  },
-  {
-    id: 4,
-    productoId: 4,
-    nombre: "Aceite vegetal",
-    cantidad: 14,
-    unidad: "lt",
-    fechaVencimiento: addDays(80),
-    fechaRecepcion: addDays(-10),
-    lote: "AC-778",
-    proveedor: "Mayorista Norte",
-    observaciones: "Vigente",
-    stockMinimo: 10,
-    revisada: false
-  },
-  {
-    id: 5,
-    productoId: 5,
-    nombre: "Chocolate cobertura",
-    cantidad: 5,
-    unidad: "kg",
-    fechaVencimiento: addDays(19),
-    fechaRecepcion: addDays(-12),
-    lote: "CH-052",
-    proveedor: "Cacao Pro",
-    observaciones: "Bajo stock",
-    stockMinimo: 8,
-    revisada: false
-  },
-  {
-    id: 6,
-    productoId: 6,
-    nombre: "Sal fina",
-    cantidad: 30,
-    unidad: "kg",
-    fechaVencimiento: null,
-    fechaRecepcion: addDays(-60),
-    lote: "SF-011",
-    proveedor: "Salinas",
-    observaciones: "Sin vencimiento declarado",
-    stockMinimo: 6,
-    revisada: false
   }
 ];
 
@@ -127,7 +96,11 @@ const elements = {
   inventorySourceText: document.getElementById("inventorySourceText"),
   entryModal: document.getElementById("entryModal"),
   entryForm: document.getElementById("entryForm"),
-  saveEntryBtn: document.getElementById("saveEntryBtn")
+  saveEntryBtn: document.getElementById("saveEntryBtn"),
+  bulkModal: document.getElementById("bulkModal"),
+  bulkTableBody: document.getElementById("bulkTableBody"),
+  bulkErrorList: document.getElementById("bulkErrorList"),
+  saveBulkBtn: document.getElementById("saveBulkBtn")
 };
 
 function normalize(text) {
@@ -154,23 +127,10 @@ function getDaysRemaining(isoDate) {
 
 function getStatus(item) {
   const days = getDaysRemaining(item.fechaVencimiento);
-
-  if (days === null) {
-    return { key: "sin-fecha", label: "Sin fecha", days };
-  }
-
-  if (days < 0) {
-    return { key: "vencido", label: "Vencido", days };
-  }
-
-  if (days === 0) {
-    return { key: "hoy", label: "Vence hoy", days };
-  }
-
-  if (days <= 20) {
-    return { key: "proximo", label: "Proximo a vencer", days };
-  }
-
+  if (days === null) return { key: "sin-fecha", label: "Sin fecha", days };
+  if (days < 0) return { key: "vencido", label: "Vencido", days };
+  if (days === 0) return { key: "hoy", label: "Vence hoy", days };
+  if (days <= 20) return { key: "proximo", label: "Proximo a vencer", days };
   return { key: "vigente", label: "Vigente", days };
 }
 
@@ -212,6 +172,12 @@ function showError(message, error) {
 function clearError() {
   elements.errorBox.textContent = "";
   elements.errorBox.hidden = true;
+}
+
+function showToast(message) {
+  elements.toast.textContent = message;
+  elements.toast.classList.add("show");
+  window.setTimeout(() => elements.toast.classList.remove("show"), 2600);
 }
 
 function mapSupabaseLot(row) {
@@ -280,17 +246,12 @@ function getAlertItems(items = state.inventory) {
   return items
     .map((item) => ({ ...item, status: getStatus(item) }))
     .filter((item) => ["vencido", "hoy", "proximo"].includes(item.status.key))
-    .sort((a, b) => {
-      const aDays = a.status.days ?? Number.MAX_SAFE_INTEGER;
-      const bDays = b.status.days ?? Number.MAX_SAFE_INTEGER;
-      return aDays - bDays;
-    });
+    .sort((a, b) => (a.status.days ?? 99999) - (b.status.days ?? 99999));
 }
 
 function updateMetrics() {
   const withStatus = state.inventory.map((item) => ({ ...item, status: getStatus(item) }));
   const alerts = getAlertItems();
-
   elements.totalItems.textContent = state.inventory.length;
   elements.soonItems.textContent = withStatus.filter((item) => ["hoy", "proximo"].includes(item.status.key)).length;
   elements.expiredItems.textContent = withStatus.filter((item) => item.status.key === "vencido").length;
@@ -300,7 +261,6 @@ function updateMetrics() {
 
 function renderAlerts() {
   const alerts = getAlertItems();
-
   if (!alerts.length) {
     elements.alertsList.innerHTML = '<div class="empty">No hay alertas de vencimiento activas.</div>';
     return;
@@ -329,7 +289,6 @@ function renderAlerts() {
 
 function renderInventory() {
   const rows = getFilteredInventory();
-
   if (!rows.length) {
     elements.inventoryTable.innerHTML = '<tr><td colspan="8" class="empty">No se encontraron insumos.</td></tr>';
     return;
@@ -360,14 +319,6 @@ function render() {
   renderInventory();
 }
 
-function showToast(message) {
-  elements.toast.textContent = message;
-  elements.toast.classList.add("show");
-  window.setTimeout(() => {
-    elements.toast.classList.remove("show");
-  }, 2600);
-}
-
 function openEntryModal() {
   elements.entryForm.reset();
   elements.entryForm.elements.fecha_recepcion.value = formatIsoDate(new Date());
@@ -377,6 +328,30 @@ function openEntryModal() {
 
 function closeEntryModal() {
   elements.entryModal.hidden = true;
+}
+
+function parseDateInput(value) {
+  const clean = value.trim();
+  if (!clean) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+  const match = clean.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/);
+  if (match) {
+    const day = match[1].padStart(2, "0");
+    const month = match[2].padStart(2, "0");
+    const year = match[3].length === 2 ? `20${match[3]}` : match[3];
+    return `${year}-${month}-${day}`;
+  }
+  if (/^\d{8}$/.test(clean)) return `${clean.slice(4, 8)}-${clean.slice(2, 4)}-${clean.slice(0, 2)}`;
+  if (/^\d{6}$/.test(clean)) return `20${clean.slice(4, 6)}-${clean.slice(2, 4)}-${clean.slice(0, 2)}`;
+  return clean;
+}
+
+function isValidIsoDate(value) {
+  if (!value) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(`${value}T00:00:00`);
+  return date.getFullYear() === year && date.getMonth() + 1 === month && date.getDate() === day;
 }
 
 function getFormPayload(form) {
@@ -402,6 +377,37 @@ function getFormPayload(form) {
     lote: formData.get("lote").trim() || null,
     proveedor: formData.get("proveedor").trim() || null,
     observaciones: formData.get("observaciones").trim() || null
+  };
+}
+
+function validateBulkRow(rawRow) {
+  const errors = [];
+  const nombre = rawRow.nombre.trim();
+  const cantidad = Number(rawRow.cantidad);
+  const unidad = rawRow.unidad.trim() || "kg";
+  const fechaRecepcion = parseDateInput(rawRow.fecha_recepcion || formatIsoDate(new Date()));
+  const fechaVencimiento = rawRow.fecha_vencimiento.trim() ? parseDateInput(rawRow.fecha_vencimiento) : null;
+
+  if (!nombre) errors.push("producto obligatorio");
+  if (!cantidad || cantidad <= 0) errors.push("cantidad debe ser mayor que cero");
+  if (!UNIT_OPTIONS.includes(unidad)) errors.push("unidad invalida");
+  if (!isValidIsoDate(fechaRecepcion)) errors.push("fecha recepcion invalida");
+  if (fechaVencimiento && !isValidIsoDate(fechaVencimiento)) errors.push("fecha vencimiento invalida");
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    payload: {
+      nombre,
+      nombreNormalizado: normalize(nombre),
+      cantidad,
+      unidad,
+      fechaRecepcion,
+      fechaVencimiento,
+      lote: rawRow.lote.trim() || null,
+      proveedor: rawRow.proveedor.trim() || null,
+      observaciones: rawRow.observaciones.trim() || null
+    }
   };
 }
 
@@ -467,6 +473,148 @@ async function createEntry(payload) {
   if (movementError) throw movementError;
 }
 
+function createBulkInput(name, type = "text", value = "") {
+  const input = document.createElement(type === "select" ? "select" : "input");
+  input.dataset.field = name;
+  input.className = "bulk-input";
+
+  if (type === "select") {
+    UNIT_OPTIONS.forEach((unit) => {
+      const option = document.createElement("option");
+      option.value = unit;
+      option.textContent = unit;
+      input.appendChild(option);
+    });
+    input.value = value || "kg";
+    return input;
+  }
+
+  input.type = type;
+  input.value = value;
+  if (name === "cantidad") {
+    input.min = "0.001";
+    input.step = "0.001";
+  }
+  return input;
+}
+
+function addBulkRow(values = {}, focusFirst = false) {
+  const tr = document.createElement("tr");
+  BULK_COLUMNS.forEach((column) => {
+    const td = document.createElement("td");
+    const type = column === "cantidad" ? "number" : column === "unidad" ? "select" : column.startsWith("fecha") ? "date" : "text";
+    const defaultValue = column === "fecha_recepcion" ? formatIsoDate(new Date()) : "";
+    td.appendChild(createBulkInput(column, type, values[column] ?? defaultValue));
+    tr.appendChild(td);
+  });
+
+  const errorTd = document.createElement("td");
+  errorTd.className = "bulk-row-error";
+  errorTd.hidden = true;
+  tr.appendChild(errorTd);
+  elements.bulkTableBody.appendChild(tr);
+
+  if (focusFirst) tr.querySelector(".bulk-input").focus();
+  return tr;
+}
+
+function ensureBulkRows() {
+  elements.bulkTableBody.innerHTML = "";
+  for (let i = 0; i < 5; i += 1) addBulkRow();
+}
+
+function openBulkModal() {
+  ensureBulkRows();
+  elements.bulkErrorList.hidden = true;
+  elements.bulkErrorList.innerHTML = "";
+  elements.bulkModal.hidden = false;
+  elements.bulkTableBody.querySelector(".bulk-input")?.focus();
+}
+
+function closeBulkModal() {
+  elements.bulkModal.hidden = true;
+}
+
+function getBulkRows() {
+  return [...elements.bulkTableBody.querySelectorAll("tr")].map((tr) => {
+    const row = {};
+    BULK_COLUMNS.forEach((column) => {
+      row[column] = tr.querySelector(`[data-field="${column}"]`).value;
+    });
+    return { tr, row };
+  });
+}
+
+function isBulkRowEmpty(row) {
+  return BULK_COLUMNS.every((column) => !row[column].trim());
+}
+
+function markBulkValidation(results) {
+  const messages = [];
+  results.forEach((result) => {
+    result.tr.classList.toggle("row-invalid", !result.valid);
+    const errorCell = result.tr.querySelector(".bulk-row-error");
+    errorCell.hidden = result.valid;
+    errorCell.textContent = result.valid ? "" : result.errors.join(", ");
+    if (!result.valid) messages.push(`Fila ${result.index}: ${result.errors.join(", ")}`);
+  });
+
+  elements.bulkErrorList.hidden = messages.length === 0;
+  elements.bulkErrorList.innerHTML = messages.map((message) => `<div>${escapeHtml(message)}</div>`).join("");
+}
+
+function validateBulkRows() {
+  const rows = getBulkRows().filter(({ row }) => !isBulkRowEmpty(row));
+  const results = rows.map(({ tr, row }, index) => ({
+    tr,
+    index: index + 1,
+    ...validateBulkRow(row)
+  }));
+  markBulkValidation(results);
+  return results;
+}
+
+function moveToNextBulkInput(currentInput) {
+  const inputs = [...elements.bulkTableBody.querySelectorAll(".bulk-input")];
+  const currentIndex = inputs.indexOf(currentInput);
+  const next = inputs[currentIndex + 1];
+  if (next) {
+    next.focus();
+    next.select?.();
+    return;
+  }
+  addBulkRow({}, true);
+}
+
+function pasteExcelData(event) {
+  const target = event.target.closest(".bulk-input");
+  if (!target) return;
+
+  const text = event.clipboardData.getData("text");
+  if (!text.includes("\t") && !text.includes("\n")) return;
+  event.preventDefault();
+
+  const rows = text.trimEnd().split(/\r?\n/).map((line) => line.split("\t"));
+  const startCell = target.closest("td");
+  const startRow = target.closest("tr");
+  const startRowIndex = [...elements.bulkTableBody.children].indexOf(startRow);
+  const startColumnIndex = [...startRow.children].indexOf(startCell);
+
+  rows.forEach((cells, rowOffset) => {
+    while (elements.bulkTableBody.children.length <= startRowIndex + rowOffset) {
+      addBulkRow();
+    }
+
+    const row = elements.bulkTableBody.children[startRowIndex + rowOffset];
+    cells.forEach((cellValue, columnOffset) => {
+      const columnName = BULK_COLUMNS[startColumnIndex + columnOffset];
+      if (!columnName) return;
+      const input = row.querySelector(`[data-field="${columnName}"]`);
+      if (input) input.value = columnName.startsWith("fecha") ? parseDateInput(cellValue) || "" : cellValue.trim();
+    });
+  });
+}
+
 async function markAlertReviewed(id) {
   if (state.usingFallback) {
     const item = state.inventory.find((entry) => String(entry.id) === String(id));
@@ -504,7 +652,6 @@ document.addEventListener("click", (event) => {
 document.getElementById("newEntryBtn").addEventListener("click", openEntryModal);
 document.getElementById("closeEntryModal").addEventListener("click", closeEntryModal);
 document.getElementById("cancelEntry").addEventListener("click", closeEntryModal);
-
 elements.entryModal.addEventListener("click", (event) => {
   if (event.target === elements.entryModal) closeEntryModal();
 });
@@ -516,8 +663,7 @@ elements.entryForm.addEventListener("submit", async (event) => {
   elements.saveEntryBtn.textContent = "Guardando...";
 
   try {
-    const payload = getFormPayload(elements.entryForm);
-    await createEntry(payload);
+    await createEntry(getFormPayload(elements.entryForm));
     closeEntryModal();
     showToast("Ingreso guardado correctamente en Supabase.");
     await refreshInventory();
@@ -529,12 +675,78 @@ elements.entryForm.addEventListener("submit", async (event) => {
   }
 });
 
-document.getElementById("bulkEntryBtn").addEventListener("click", () => {
-  showToast("Ingreso masivo: tabla operativa pendiente de desarrollo.");
+document.getElementById("bulkEntryBtn").addEventListener("click", openBulkModal);
+document.getElementById("closeBulkModal").addEventListener("click", closeBulkModal);
+document.getElementById("cancelBulk").addEventListener("click", closeBulkModal);
+document.getElementById("addBulkRow").addEventListener("click", () => addBulkRow({}, true));
+elements.bulkModal.addEventListener("click", (event) => {
+  if (event.target === elements.bulkModal) closeBulkModal();
+});
+
+elements.bulkTableBody.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  const input = event.target.closest(".bulk-input");
+  if (!input) return;
+  event.preventDefault();
+  moveToNextBulkInput(input);
+});
+
+elements.bulkTableBody.addEventListener("paste", pasteExcelData);
+
+elements.saveBulkBtn.addEventListener("click", async () => {
+  clearError();
+  const results = validateBulkRows();
+  const validRows = results.filter((result) => result.valid);
+
+  if (!results.length) {
+    elements.bulkErrorList.hidden = false;
+    elements.bulkErrorList.innerHTML = "<div>Agrega al menos una fila antes de guardar.</div>";
+    return;
+  }
+
+  if (!validRows.length) {
+    showToast("No hay filas validas para guardar.");
+    return;
+  }
+
+  elements.saveBulkBtn.disabled = true;
+  elements.saveBulkBtn.textContent = "Guardando...";
+
+  let saved = 0;
+  const saveErrors = [];
+
+  for (const row of validRows) {
+    try {
+      await createEntry(row.payload);
+      saved += 1;
+    } catch (error) {
+      row.tr.classList.add("row-invalid");
+      const errorCell = row.tr.querySelector(".bulk-row-error");
+      errorCell.hidden = false;
+      errorCell.textContent = getSupabaseErrorMessage(error);
+      saveErrors.push(`Fila ${row.index}: ${getSupabaseErrorMessage(error)}`);
+    }
+  }
+
+  if (saveErrors.length) {
+    elements.bulkErrorList.hidden = false;
+    elements.bulkErrorList.innerHTML = saveErrors.map((message) => `<div>${escapeHtml(message)}</div>`).join("");
+    showError("Algunas filas no se pudieron guardar", { message: saveErrors.join(" | ") });
+  }
+
+  if (saved > 0) {
+    showToast(`${saved} filas guardadas correctamente.`);
+    await refreshInventory();
+  }
+
+  if (saved === validRows.length) closeBulkModal();
+
+  elements.saveBulkBtn.disabled = false;
+  elements.saveBulkBtn.textContent = "Guardar filas validas";
 });
 
 document.getElementById("importBtn").addEventListener("click", () => {
-  showToast("Importacion: los datos deben quedar como borrador antes de guardar.");
+  showToast("Importacion desde foto/Excel queda pendiente. Prioridad actual: ingreso masivo.");
 });
 
 refreshInventory();
