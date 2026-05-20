@@ -3,23 +3,25 @@ const SUPABASE_URL = "https://wsnnhczdhiysghstplki.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indzbm5oY3pkaGl5c2doc3RwbGtpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDU3ODYsImV4cCI6MjA5NDg4MTc4Nn0.wDawAny58YsXgNgPaV6oKzQD4QdFdLYO8vomVFVKGAQ";
 
-const supabaseClient = supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const BULK_COLUMNS = [
-  "nombre",
-  "cantidad",
-  "unidad",
-  "fecha_recepcion",
-  "fecha_vencimiento",
-  "lote",
-  "proveedor",
-  "observaciones"
-];
+const BULK_COLUMNS = ["nombre", "cantidad", "unidad", "fecha_vencimiento", "lote", "observaciones"];
 const UNIT_OPTIONS = ["kg", "g", "lt", "ml", "unidad", "caja", "paquete"];
+const MONTHS = [
+  { label: "Ene", className: "month-1" },
+  { label: "Feb", className: "month-2" },
+  { label: "Mar", className: "month-3" },
+  { label: "Abr", className: "month-4" },
+  { label: "May", className: "month-5" },
+  { label: "Jun", className: "month-6" },
+  { label: "Jul", className: "month-7" },
+  { label: "Ago", className: "month-8" },
+  { label: "Sep", className: "month-9" },
+  { label: "Oct", className: "month-10" },
+  { label: "Nov", className: "month-11" },
+  { label: "Dic", className: "month-12" }
+];
 
 const formatIsoDate = (date) => date.toISOString().slice(0, 10);
 
@@ -40,7 +42,6 @@ const mockInventory = [
     fechaVencimiento: addDays(12),
     fechaRecepcion: addDays(-8),
     lote: "HF-2405",
-    proveedor: "Molinos Sur",
     observaciones: "Ingreso reciente",
     stockMinimo: 20,
     revisada: false
@@ -54,7 +55,6 @@ const mockInventory = [
     fechaVencimiento: addDays(-3),
     fechaRecepcion: addDays(-35),
     lote: "AZ-118",
-    proveedor: "Distribuidora Centro",
     observaciones: "Revisar retiro por vencimiento",
     stockMinimo: 12,
     revisada: false
@@ -68,7 +68,6 @@ const mockInventory = [
     fechaVencimiento: addDays(0),
     fechaRecepcion: addDays(-2),
     lote: "LE-091",
-    proveedor: "Lacteos Valle",
     observaciones: "Prioridad de consumo",
     stockMinimo: 10,
     revisada: false
@@ -78,7 +77,8 @@ const mockInventory = [
 const state = {
   query: "",
   inventory: [],
-  lowStockCount: 0,
+  products: [],
+  lowStockProducts: [],
   usingFallback: false
 };
 
@@ -94,13 +94,24 @@ const elements = {
   toast: document.getElementById("toast"),
   errorBox: document.getElementById("errorBox"),
   inventorySourceText: document.getElementById("inventorySourceText"),
+  productSuggestions: document.getElementById("productSuggestions"),
   entryModal: document.getElementById("entryModal"),
   entryForm: document.getElementById("entryForm"),
+  entryMonthPreview: document.getElementById("entryMonthPreview"),
   saveEntryBtn: document.getElementById("saveEntryBtn"),
+  editModal: document.getElementById("editModal"),
+  editForm: document.getElementById("editForm"),
+  editProductName: document.getElementById("editProductName"),
+  editMonthPreview: document.getElementById("editMonthPreview"),
+  saveEditBtn: document.getElementById("saveEditBtn"),
   bulkModal: document.getElementById("bulkModal"),
   bulkTableBody: document.getElementById("bulkTableBody"),
   bulkErrorList: document.getElementById("bulkErrorList"),
-  saveBulkBtn: document.getElementById("saveBulkBtn")
+  bulkReceiptDate: document.getElementById("bulkReceiptDate"),
+  saveBulkBtn: document.getElementById("saveBulkBtn"),
+  detailModal: document.getElementById("detailModal"),
+  detailModalTitle: document.getElementById("detailModalTitle"),
+  detailTableBody: document.getElementById("detailTableBody")
 };
 
 function normalize(text) {
@@ -147,8 +158,26 @@ function formatDays(days) {
   return `${days} dias`;
 }
 
+function getMonthInfo(isoDate) {
+  if (!isoDate) return null;
+  const [year, month] = isoDate.split("-");
+  const info = MONTHS[Number(month) - 1];
+  if (!info) return null;
+  return { ...info, year };
+}
+
+function renderMonthBadge(isoDate) {
+  const info = getMonthInfo(isoDate);
+  if (!info) return '<span class="month-badge no-month">Sin fecha</span>';
+  return `<span class="month-badge"><span class="month-dot ${info.className}"></span>${info.label} ${info.year}</span>`;
+}
+
+function setMonthPreview(element, isoDate) {
+  element.innerHTML = isoDate ? renderMonthBadge(isoDate) : "";
+}
+
 function escapeHtml(value) {
-  return value
+  return (value ?? "")
     .toString()
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -190,30 +219,49 @@ function mapSupabaseLot(row) {
     fechaVencimiento: row.fecha_vencimiento,
     fechaRecepcion: row.fecha_recepcion,
     lote: row.lote,
-    proveedor: row.proveedor,
     observaciones: row.observaciones,
     stockMinimo: Number(row.stock_minimo ?? 0),
-    revisada: Boolean(row.alerta_vencimiento_revisada)
+    revisada: Boolean(row.alerta_vencimiento_revisada),
+    activo: row.activo !== false
   };
 }
 
+async function loadProductsFromSupabase() {
+  const { data, error } = await supabaseClient
+    .from("productos_insumos")
+    .select("id,nombre,nombre_normalizado,unidad_default,stock_minimo,activo")
+    .eq("activo", true)
+    .is("deleted_at", null)
+    .order("nombre", { ascending: true });
+
+  if (error) throw error;
+  state.products = (data || []).map((product) => ({
+    ...product,
+    nombre_normalizado: product.nombre_normalizado || normalize(product.nombre)
+  }));
+  renderProductSuggestions();
+}
+
 async function loadInventoryFromSupabase() {
+  await loadProductsFromSupabase();
+
   const { data, error } = await supabaseClient
     .from("inventario_lotes_disponibles")
     .select("*")
     .gt("cantidad_disponible", 0)
+    .eq("activo", true)
     .order("fecha_vencimiento", { ascending: true, nullsFirst: false });
 
   if (error) throw error;
 
   const { data: lowStockRows, error: lowStockError } = await supabaseClient
     .from("alertas_stock_minimo")
-    .select("producto_id");
+    .select("*");
 
   if (lowStockError) throw lowStockError;
 
   state.inventory = (data || []).map(mapSupabaseLot);
-  state.lowStockCount = (lowStockRows || []).length;
+  state.lowStockProducts = lowStockRows || [];
   state.usingFallback = false;
   elements.inventorySourceText.textContent = "Datos reales cargados desde Supabase.";
   clearError();
@@ -221,8 +269,19 @@ async function loadInventoryFromSupabase() {
 
 function loadFallbackInventory(error) {
   state.inventory = mockInventory.map((item) => ({ ...item }));
-  state.lowStockCount = state.inventory.filter((item) => item.cantidad < item.stockMinimo).length;
+  state.products = mockInventory.map((item) => ({
+    id: item.productoId,
+    nombre: item.nombre,
+    nombre_normalizado: normalize(item.nombre),
+    unidad_default: item.unidad,
+    stock_minimo: item.stockMinimo,
+    activo: true
+  }));
+  state.lowStockProducts = state.inventory
+    .filter((item) => item.cantidad < item.stockMinimo)
+    .map((item) => ({ producto_id: item.productoId, nombre: item.nombre, stock_actual: item.cantidad, stock_minimo: item.stockMinimo }));
   state.usingFallback = true;
+  renderProductSuggestions();
   elements.inventorySourceText.textContent = "Supabase no respondio correctamente. Mostrando datos mock de respaldo.";
   showError("No se pudo cargar inventario desde Supabase", error);
 }
@@ -234,6 +293,29 @@ async function refreshInventory() {
     loadFallbackInventory(error);
   }
   render();
+}
+
+function renderProductSuggestions() {
+  const seen = new Set();
+  elements.productSuggestions.innerHTML = state.products
+    .filter((product) => {
+      const key = product.nombre_normalizado || normalize(product.nombre);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((product) => `<option value="${escapeHtml(product.nombre)}" label="${escapeHtml(product.nombre_normalizado || normalize(product.nombre))}"></option>`)
+    .join("");
+}
+
+function findProductByName(name) {
+  const normalized = normalize(name);
+  return state.products.find((product) => product.nombre_normalizado === normalized || normalize(product.nombre) === normalized);
+}
+
+function maybeAutofillUnit(nameInput, unitInput) {
+  const product = findProductByName(nameInput.value);
+  if (product?.unidad_default) unitInput.value = product.unidad_default;
 }
 
 function getFilteredInventory() {
@@ -249,13 +331,31 @@ function getAlertItems(items = state.inventory) {
     .sort((a, b) => (a.status.days ?? 99999) - (b.status.days ?? 99999));
 }
 
+function getLowStockDetailItems() {
+  return state.lowStockProducts.map((row) => {
+    const productLots = state.inventory.filter((item) => String(item.productoId) === String(row.producto_id));
+    const firstLot = productLots[0] || {};
+    return {
+      id: row.producto_id,
+      productoId: row.producto_id,
+      nombre: row.nombre || firstLot.nombre || "Producto bajo stock",
+      cantidad: Number(row.stock_actual ?? 0),
+      unidad: row.unidad_default || firstLot.unidad || "-",
+      fechaVencimiento: firstLot.fechaVencimiento || null,
+      lote: firstLot.lote || "-",
+      observaciones: `Stock minimo: ${row.stock_minimo ?? 0}. Faltante: ${row.faltante ?? "-"}`,
+      statusOverride: { key: "proximo", label: "Bajo stock", days: null }
+    };
+  });
+}
+
 function updateMetrics() {
   const withStatus = state.inventory.map((item) => ({ ...item, status: getStatus(item) }));
   const alerts = getAlertItems();
   elements.totalItems.textContent = state.inventory.length;
   elements.soonItems.textContent = withStatus.filter((item) => ["hoy", "proximo"].includes(item.status.key)).length;
   elements.expiredItems.textContent = withStatus.filter((item) => item.status.key === "vencido").length;
-  elements.lowStockItems.textContent = state.lowStockCount;
+  elements.lowStockItems.textContent = state.lowStockProducts.length;
   elements.alertCount.textContent = `${alerts.length} alertas`;
 }
 
@@ -272,16 +372,16 @@ function renderAlerts() {
         <div>
           <div class="alert-title">${escapeHtml(item.nombre)}</div>
           <div class="alert-meta">${item.cantidad} ${escapeHtml(item.unidad)} disponible - lote ${escapeHtml(item.lote || "sin lote")}</div>
-          <div class="alert-meta">Proveedor: ${escapeHtml(item.proveedor || "sin proveedor")} - Recepcion: ${formatDisplayDate(item.fechaRecepcion)}</div>
+          <div class="alert-meta">Recepcion: ${formatDisplayDate(item.fechaRecepcion)}</div>
           <div class="alert-meta">${escapeHtml(item.observaciones || "Sin observaciones")}</div>
         </div>
         <span>${formatDisplayDate(item.fechaVencimiento)}</span>
+        ${renderMonthBadge(item.fechaVencimiento)}
         <span>${formatDays(item.status.days)}</span>
         <span class="status ${item.status.key}">${item.status.label}</span>
         <button class="btn" type="button" data-review-id="${item.id}">
           ${item.revisada ? "Revisada" : "Marcar revisada"}
         </button>
-        ${item.revisada ? '<span class="reviewed">Alerta revisada</span>' : ""}
       </article>
     `)
     .join("");
@@ -290,7 +390,7 @@ function renderAlerts() {
 function renderInventory() {
   const rows = getFilteredInventory();
   if (!rows.length) {
-    elements.inventoryTable.innerHTML = '<tr><td colspan="8" class="empty">No se encontraron insumos.</td></tr>';
+    elements.inventoryTable.innerHTML = '<tr><td colspan="9" class="empty">No se encontraron insumos.</td></tr>';
     return;
   }
 
@@ -303,10 +403,14 @@ function renderInventory() {
           <td>${item.cantidad}</td>
           <td>${escapeHtml(item.unidad)}</td>
           <td>${formatDisplayDate(item.fechaVencimiento)}</td>
+          <td>${renderMonthBadge(item.fechaVencimiento)}</td>
           <td>${formatDays(status.days)}</td>
           <td>${escapeHtml(item.lote || "-")}</td>
-          <td>${escapeHtml(item.proveedor || "-")}</td>
           <td><span class="status ${status.key}">${status.label}</span></td>
+          <td class="row-actions">
+            <button class="btn small" type="button" data-edit-id="${item.id}">Editar</button>
+            <button class="btn small danger-btn" type="button" data-delete-id="${item.id}">Eliminar</button>
+          </td>
         </tr>
       `;
     })
@@ -322,12 +426,33 @@ function render() {
 function openEntryModal() {
   elements.entryForm.reset();
   elements.entryForm.elements.fecha_recepcion.value = formatIsoDate(new Date());
+  setMonthPreview(elements.entryMonthPreview, "");
   elements.entryModal.hidden = false;
   elements.entryForm.elements.nombre.focus();
 }
 
 function closeEntryModal() {
   elements.entryModal.hidden = true;
+}
+
+function openEditModal(item) {
+  elements.editForm.reset();
+  elements.editForm.elements.lote_id.value = item.id;
+  elements.editForm.elements.producto_id.value = item.productoId;
+  elements.editForm.elements.cantidad_actual.value = item.cantidad;
+  elements.editForm.elements.cantidad.value = item.cantidad;
+  elements.editForm.elements.unidad.value = item.unidad;
+  elements.editForm.elements.fecha_recepcion.value = item.fechaRecepcion || formatIsoDate(new Date());
+  elements.editForm.elements.fecha_vencimiento.value = item.fechaVencimiento || "";
+  elements.editForm.elements.lote.value = item.lote || "";
+  elements.editForm.elements.observaciones.value = item.observaciones || "";
+  elements.editProductName.textContent = item.nombre;
+  setMonthPreview(elements.editMonthPreview, item.fechaVencimiento);
+  elements.editModal.hidden = false;
+}
+
+function closeEditModal() {
+  elements.editModal.hidden = true;
 }
 
 function parseDateInput(value) {
@@ -375,7 +500,6 @@ function getFormPayload(form) {
     fechaRecepcion,
     fechaVencimiento,
     lote: formData.get("lote").trim() || null,
-    proveedor: formData.get("proveedor").trim() || null,
     observaciones: formData.get("observaciones").trim() || null
   };
 }
@@ -385,7 +509,7 @@ function validateBulkRow(rawRow) {
   const nombre = rawRow.nombre.trim();
   const cantidad = Number(rawRow.cantidad);
   const unidad = rawRow.unidad.trim() || "kg";
-  const fechaRecepcion = parseDateInput(rawRow.fecha_recepcion || formatIsoDate(new Date()));
+  const fechaRecepcion = elements.bulkReceiptDate.value || formatIsoDate(new Date());
   const fechaVencimiento = rawRow.fecha_vencimiento.trim() ? parseDateInput(rawRow.fecha_vencimiento) : null;
 
   if (!nombre) errors.push("producto obligatorio");
@@ -405,16 +529,18 @@ function validateBulkRow(rawRow) {
       fechaRecepcion,
       fechaVencimiento,
       lote: rawRow.lote.trim() || null,
-      proveedor: rawRow.proveedor.trim() || null,
       observaciones: rawRow.observaciones.trim() || null
     }
   };
 }
 
 async function findOrCreateProduct(payload) {
+  const cached = state.products.find((product) => product.nombre_normalizado === payload.nombreNormalizado);
+  if (cached) return cached;
+
   const { data: existingProduct, error: findError } = await supabaseClient
     .from("productos_insumos")
-    .select("id")
+    .select("id,nombre,nombre_normalizado,unidad_default")
     .eq("nombre_normalizado", payload.nombreNormalizado)
     .maybeSingle();
 
@@ -430,10 +556,12 @@ async function findOrCreateProduct(payload) {
       stock_minimo: 0,
       activo: true
     })
-    .select("id")
+    .select("id,nombre,nombre_normalizado,unidad_default")
     .single();
 
   if (createError) throw createError;
+  state.products.push(createdProduct);
+  renderProductSuggestions();
   return createdProduct;
 }
 
@@ -447,7 +575,6 @@ async function createEntry(payload) {
       fecha_recepcion: payload.fechaRecepcion,
       fecha_vencimiento: payload.fechaVencimiento,
       lote: payload.lote,
-      proveedor: payload.proveedor,
       unidad: payload.unidad,
       observaciones: payload.observaciones,
       alerta_vencimiento_revisada: false,
@@ -473,6 +600,96 @@ async function createEntry(payload) {
   if (movementError) throw movementError;
 }
 
+async function updateEntry(form) {
+  const formData = new FormData(form);
+  const loteId = formData.get("lote_id");
+  const productoId = formData.get("producto_id");
+  const currentQuantity = Number(formData.get("cantidad_actual"));
+  const nextQuantity = Number(formData.get("cantidad"));
+  const unidad = formData.get("unidad");
+  const fechaRecepcion = formData.get("fecha_recepcion");
+  const fechaVencimiento = formData.get("fecha_vencimiento") || null;
+  const lote = formData.get("lote").trim() || null;
+  const observaciones = formData.get("observaciones").trim() || null;
+
+  if (nextQuantity < 0) throw new Error("La cantidad no puede ser negativa.");
+
+  const { error: lotError } = await supabaseClient
+    .from("insumo_lotes")
+    .update({
+      fecha_recepcion: fechaRecepcion,
+      fecha_vencimiento: fechaVencimiento,
+      lote,
+      unidad,
+      observaciones
+    })
+    .eq("id", loteId);
+
+  if (lotError) throw lotError;
+
+  const delta = Number((nextQuantity - currentQuantity).toFixed(3));
+  if (delta === 0) return;
+
+  const movementType = delta > 0 ? "ingreso" : "eliminacion";
+  const { error: movementError } = await supabaseClient
+    .from("movimientos_inventario")
+    .insert({
+      producto_id: productoId,
+      lote_id: loteId,
+      tipo_movimiento: movementType,
+      cantidad: Math.abs(delta),
+      unidad,
+      motivo: "Ajuste manual desde edicion",
+      observacion: observaciones
+    });
+
+  if (movementError) throw movementError;
+}
+
+async function deleteEntry(id) {
+  const item = state.inventory.find((entry) => String(entry.id) === String(id));
+  if (!item) return;
+  const confirmed = window.confirm(`Eliminar el lote de ${item.nombre}? Se marcara inactivo y se registrara movimiento de eliminacion.`);
+  if (!confirmed) return;
+
+  if (state.usingFallback) {
+    state.inventory = state.inventory.filter((entry) => String(entry.id) !== String(id));
+    render();
+    showToast("Eliminado en modo mock.");
+    return;
+  }
+
+  const { error: movementError } = await supabaseClient
+    .from("movimientos_inventario")
+    .insert({
+      producto_id: item.productoId,
+      lote_id: item.id,
+      tipo_movimiento: "eliminacion",
+      cantidad: item.cantidad,
+      unidad: item.unidad,
+      motivo: "Eliminacion logica desde inventario",
+      observacion: item.observaciones
+    });
+
+  if (movementError) {
+    showError("No se pudo crear movimiento de eliminacion", movementError);
+    return;
+  }
+
+  const { error: lotError } = await supabaseClient
+    .from("insumo_lotes")
+    .update({ activo: false, deleted_at: new Date().toISOString() })
+    .eq("id", item.id);
+
+  if (lotError) {
+    showError("No se pudo marcar el lote como inactivo", lotError);
+    return;
+  }
+
+  await refreshInventory();
+  showToast("Eliminado.");
+}
+
 function createBulkInput(name, type = "text", value = "") {
   const input = document.createElement(type === "select" ? "select" : "input");
   input.dataset.field = name;
@@ -491,6 +708,10 @@ function createBulkInput(name, type = "text", value = "") {
 
   input.type = type;
   input.value = value;
+  if (name === "nombre") {
+    input.setAttribute("list", "productSuggestions");
+    input.autocomplete = "off";
+  }
   if (name === "cantidad") {
     input.min = "0.001";
     input.step = "0.001";
@@ -503,9 +724,14 @@ function addBulkRow(values = {}, focusFirst = false) {
   BULK_COLUMNS.forEach((column) => {
     const td = document.createElement("td");
     const type = column === "cantidad" ? "number" : column === "unidad" ? "select" : column.startsWith("fecha") ? "date" : "text";
-    const defaultValue = column === "fecha_recepcion" ? formatIsoDate(new Date()) : "";
-    td.appendChild(createBulkInput(column, type, values[column] ?? defaultValue));
+    td.appendChild(createBulkInput(column, type, values[column] ?? ""));
     tr.appendChild(td);
+    if (column === "fecha_vencimiento") {
+      const monthTd = document.createElement("td");
+      monthTd.className = "bulk-month-cell";
+      monthTd.innerHTML = "";
+      tr.appendChild(monthTd);
+    }
   });
 
   const errorTd = document.createElement("td");
@@ -525,6 +751,7 @@ function ensureBulkRows() {
 
 function openBulkModal() {
   ensureBulkRows();
+  elements.bulkReceiptDate.value = formatIsoDate(new Date());
   elements.bulkErrorList.hidden = true;
   elements.bulkErrorList.innerHTML = "";
   elements.bulkModal.hidden = false;
@@ -589,7 +816,6 @@ function moveToNextBulkInput(currentInput) {
 function pasteExcelData(event) {
   const target = event.target.closest(".bulk-input");
   if (!target) return;
-
   const text = event.clipboardData.getData("text");
   if (!text.includes("\t") && !text.includes("\n")) return;
   event.preventDefault();
@@ -598,19 +824,19 @@ function pasteExcelData(event) {
   const startCell = target.closest("td");
   const startRow = target.closest("tr");
   const startRowIndex = [...elements.bulkTableBody.children].indexOf(startRow);
-  const startColumnIndex = [...startRow.children].indexOf(startCell);
+  const startColumnIndex = [...startRow.children].filter((cell) => !cell.classList.contains("bulk-month-cell")).indexOf(startCell);
 
   rows.forEach((cells, rowOffset) => {
-    while (elements.bulkTableBody.children.length <= startRowIndex + rowOffset) {
-      addBulkRow();
-    }
-
+    while (elements.bulkTableBody.children.length <= startRowIndex + rowOffset) addBulkRow();
     const row = elements.bulkTableBody.children[startRowIndex + rowOffset];
     cells.forEach((cellValue, columnOffset) => {
       const columnName = BULK_COLUMNS[startColumnIndex + columnOffset];
       if (!columnName) return;
       const input = row.querySelector(`[data-field="${columnName}"]`);
-      if (input) input.value = columnName.startsWith("fecha") ? parseDateInput(cellValue) || "" : cellValue.trim();
+      if (!input) return;
+      input.value = columnName.startsWith("fecha") ? parseDateInput(cellValue) || "" : cellValue.trim();
+      if (columnName === "nombre") maybeAutofillUnit(input, row.querySelector('[data-field="unidad"]'));
+      if (columnName === "fecha_vencimiento") row.querySelector(".bulk-month-cell").innerHTML = renderMonthBadge(input.value);
     });
   });
 }
@@ -638,6 +864,48 @@ async function markAlertReviewed(id) {
   showToast("Alerta marcada como revisada. El stock no fue modificado.");
 }
 
+function getDetailItems(type) {
+  if (type === "total") return state.inventory;
+  if (type === "soon") return state.inventory.filter((item) => ["hoy", "proximo"].includes(getStatus(item).key));
+  if (type === "expired") return state.inventory.filter((item) => getStatus(item).key === "vencido");
+  if (type === "lowstock") return getLowStockDetailItems();
+  return [];
+}
+
+function openDetailModal(type) {
+  const titles = {
+    total: "Total insumos",
+    soon: "Proximos a vencer",
+    expired: "Vencidos",
+    lowstock: "Bajo stock"
+  };
+  const items = getDetailItems(type);
+  elements.detailModalTitle.textContent = titles[type] || "Detalle";
+  elements.detailTableBody.innerHTML = items.length
+    ? items.map((item) => {
+        const status = item.statusOverride || getStatus(item);
+        return `
+          <tr>
+            <td><strong>${escapeHtml(item.nombre)}</strong></td>
+            <td>${item.cantidad}</td>
+            <td>${escapeHtml(item.unidad)}</td>
+            <td>${formatDisplayDate(item.fechaVencimiento)}</td>
+            <td>${renderMonthBadge(item.fechaVencimiento)}</td>
+            <td>${formatDays(status.days)}</td>
+            <td>${escapeHtml(item.lote || "-")}</td>
+            <td>${escapeHtml(item.observaciones || "-")}</td>
+            <td><span class="status ${status.key}">${status.label}</span></td>
+          </tr>
+        `;
+      }).join("")
+    : '<tr><td colspan="9" class="empty">No hay datos para este filtro.</td></tr>';
+  elements.detailModal.hidden = false;
+}
+
+function closeDetailModal() {
+  elements.detailModal.hidden = true;
+}
+
 elements.searchInput.addEventListener("input", (event) => {
   state.query = event.target.value;
   renderInventory();
@@ -645,8 +913,26 @@ elements.searchInput.addEventListener("input", (event) => {
 
 document.addEventListener("click", (event) => {
   const reviewButton = event.target.closest("[data-review-id]");
-  if (!reviewButton) return;
-  markAlertReviewed(reviewButton.dataset.reviewId);
+  if (reviewButton) {
+    markAlertReviewed(reviewButton.dataset.reviewId);
+    return;
+  }
+
+  const editButton = event.target.closest("[data-edit-id]");
+  if (editButton) {
+    const item = state.inventory.find((entry) => String(entry.id) === String(editButton.dataset.editId));
+    if (item) openEditModal(item);
+    return;
+  }
+
+  const deleteButton = event.target.closest("[data-delete-id]");
+  if (deleteButton) {
+    deleteEntry(deleteButton.dataset.deleteId);
+    return;
+  }
+
+  const detailButton = event.target.closest("[data-detail]");
+  if (detailButton) openDetailModal(detailButton.dataset.detail);
 });
 
 document.getElementById("newEntryBtn").addEventListener("click", openEntryModal);
@@ -656,22 +942,63 @@ elements.entryModal.addEventListener("click", (event) => {
   if (event.target === elements.entryModal) closeEntryModal();
 });
 
+elements.entryForm.elements.nombre.addEventListener("input", () => {
+  maybeAutofillUnit(elements.entryForm.elements.nombre, elements.entryForm.elements.unidad);
+});
+elements.entryForm.elements.fecha_vencimiento.addEventListener("input", (event) => {
+  setMonthPreview(elements.entryMonthPreview, event.target.value);
+});
+elements.entryForm.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && event.target.tagName !== "TEXTAREA") {
+    const fields = [...elements.entryForm.querySelectorAll("input, select, textarea, button")].filter((field) => !field.disabled && field.type !== "hidden");
+    const index = fields.indexOf(event.target);
+    if (index >= 0 && index < fields.length - 1) {
+      event.preventDefault();
+      fields[index + 1].focus();
+    }
+  }
+});
 elements.entryForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   clearError();
   elements.saveEntryBtn.disabled = true;
   elements.saveEntryBtn.textContent = "Guardando...";
-
   try {
     await createEntry(getFormPayload(elements.entryForm));
     closeEntryModal();
-    showToast("Ingreso guardado correctamente en Supabase.");
+    showToast("Guardadito.");
     await refreshInventory();
   } catch (error) {
     showError("No se pudo guardar el ingreso", error);
   } finally {
     elements.saveEntryBtn.disabled = false;
     elements.saveEntryBtn.textContent = "Guardar ingreso";
+  }
+});
+
+document.getElementById("closeEditModal").addEventListener("click", closeEditModal);
+document.getElementById("cancelEdit").addEventListener("click", closeEditModal);
+elements.editModal.addEventListener("click", (event) => {
+  if (event.target === elements.editModal) closeEditModal();
+});
+elements.editForm.elements.fecha_vencimiento.addEventListener("input", (event) => {
+  setMonthPreview(elements.editMonthPreview, event.target.value);
+});
+elements.editForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearError();
+  elements.saveEditBtn.disabled = true;
+  elements.saveEditBtn.textContent = "Guardando...";
+  try {
+    await updateEntry(elements.editForm);
+    closeEditModal();
+    showToast("Guardadito.");
+    await refreshInventory();
+  } catch (error) {
+    showError("No se pudo editar el ingreso", error);
+  } finally {
+    elements.saveEditBtn.disabled = false;
+    elements.saveEditBtn.textContent = "Guardar cambios";
   }
 });
 
@@ -682,7 +1009,6 @@ document.getElementById("addBulkRow").addEventListener("click", () => addBulkRow
 elements.bulkModal.addEventListener("click", (event) => {
   if (event.target === elements.bulkModal) closeBulkModal();
 });
-
 elements.bulkTableBody.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
   const input = event.target.closest(".bulk-input");
@@ -690,9 +1016,14 @@ elements.bulkTableBody.addEventListener("keydown", (event) => {
   event.preventDefault();
   moveToNextBulkInput(input);
 });
-
+elements.bulkTableBody.addEventListener("input", (event) => {
+  const input = event.target.closest(".bulk-input");
+  if (!input) return;
+  const row = input.closest("tr");
+  if (input.dataset.field === "nombre") maybeAutofillUnit(input, row.querySelector('[data-field="unidad"]'));
+  if (input.dataset.field === "fecha_vencimiento") row.querySelector(".bulk-month-cell").innerHTML = renderMonthBadge(input.value);
+});
 elements.bulkTableBody.addEventListener("paste", pasteExcelData);
-
 elements.saveBulkBtn.addEventListener("click", async () => {
   clearError();
   const results = validateBulkRows();
@@ -703,7 +1034,6 @@ elements.saveBulkBtn.addEventListener("click", async () => {
     elements.bulkErrorList.innerHTML = "<div>Agrega al menos una fila antes de guardar.</div>";
     return;
   }
-
   if (!validRows.length) {
     showToast("No hay filas validas para guardar.");
     return;
@@ -711,7 +1041,6 @@ elements.saveBulkBtn.addEventListener("click", async () => {
 
   elements.saveBulkBtn.disabled = true;
   elements.saveBulkBtn.textContent = "Guardando...";
-
   let saved = 0;
   const saveErrors = [];
 
@@ -733,20 +1062,23 @@ elements.saveBulkBtn.addEventListener("click", async () => {
     elements.bulkErrorList.innerHTML = saveErrors.map((message) => `<div>${escapeHtml(message)}</div>`).join("");
     showError("Algunas filas no se pudieron guardar", { message: saveErrors.join(" | ") });
   }
-
   if (saved > 0) {
-    showToast(`${saved} filas guardadas correctamente.`);
+    showToast("Guardadito.");
     await refreshInventory();
   }
-
   if (saved === validRows.length) closeBulkModal();
-
   elements.saveBulkBtn.disabled = false;
   elements.saveBulkBtn.textContent = "Guardar filas validas";
 });
 
+document.getElementById("closeDetailModal").addEventListener("click", closeDetailModal);
+elements.detailModal.addEventListener("click", (event) => {
+  if (event.target === elements.detailModal) closeDetailModal();
+});
+
 document.getElementById("importBtn").addEventListener("click", () => {
-  showToast("Importacion desde foto/Excel queda pendiente. Prioridad actual: ingreso masivo.");
+  showToast("Importacion desde foto/Excel queda pendiente.");
 });
 
 refreshInventory();
+
