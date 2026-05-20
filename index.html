@@ -161,10 +161,48 @@
       </section>
     </div>
 
+    <div class="modal-backdrop" id="bulkModal" hidden>
+      <section class="modal bulk-modal" role="dialog" aria-modal="true" aria-labelledby="bulkModalTitle">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Inventario</p>
+            <h2 id="bulkModalTitle">Ingreso masivo</h2>
+            <p class="modal-copy">Puedes escribir directo o pegar filas desde Excel en la tabla.</p>
+          </div>
+          <button class="icon-btn" type="button" id="closeBulkModal" aria-label="Cerrar">x</button>
+        </div>
+
+        <div class="bulk-error-list" id="bulkErrorList" hidden></div>
+
+        <div class="bulk-table-wrap">
+          <table class="bulk-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Unidad</th>
+                <th>Fecha recepcion</th>
+                <th>Fecha vencimiento</th>
+                <th>Lote</th>
+                <th>Proveedor</th>
+                <th>Observaciones</th>
+              </tr>
+            </thead>
+            <tbody id="bulkTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn" type="button" id="addBulkRow">Agregar fila</button>
+          <button class="btn" type="button" id="cancelBulk">Cancelar</button>
+          <button class="btn primary" type="button" id="saveBulkBtn">Guardar filas validas</button>
+        </div>
+      </section>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>
   </body>
 </html>
-
