@@ -248,8 +248,9 @@ function showModalConfirm({
   elements.systemModalMessage.textContent = message;
   elements.systemModalConfirm.textContent = confirmText;
   elements.systemModalCancel.textContent = cancelText;
-  elements.systemModalIcon.textContent = variant === "success" ? "OK" : "!";
+  elements.systemModalIcon.textContent = variant === "success" ? "OK" : "";
   elements.systemModalIcon.className = `system-modal-icon ${variant}`;
+  elements.systemModal.querySelector(".system-modal").classList.toggle("compact-delete", confirmText === "Eliminar");
   elements.systemModal.hidden = false;
   window.requestAnimationFrame(() => elements.systemModal.classList.add("is-open"));
   elements.systemModalConfirm.focus();
@@ -730,7 +731,7 @@ async function deleteEntry(id) {
   if (!item) return;
   const confirmed = await showModalConfirm({
     title: "Eliminar lote",
-    message: `Eliminar el lote de ${item.nombre}? Se marcara inactivo y se registrara movimiento de eliminacion.`,
+    message: `Eliminar “${item.nombre}”`,
     confirmText: "Eliminar",
     cancelText: "Cancelar",
     variant: "error"
@@ -1173,6 +1174,11 @@ document.getElementById("importBtn").addEventListener("click", () => {
 });
 
 refreshInventory();
+
+
+
+
+
 
 
 
