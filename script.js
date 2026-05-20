@@ -9,18 +9,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const BULK_COLUMNS = ["nombre", "cantidad", "unidad", "fecha_vencimiento", "lote", "observaciones"];
 const UNIT_OPTIONS = ["kg", "g", "lt", "ml", "unidad", "caja", "paquete"];
 const MONTHS = [
-  { label: "Ene", className: "month-1" },
-  { label: "Feb", className: "month-2" },
-  { label: "Mar", className: "month-3" },
-  { label: "Abr", className: "month-4" },
-  { label: "May", className: "month-5" },
-  { label: "Jun", className: "month-6" },
-  { label: "Jul", className: "month-7" },
-  { label: "Ago", className: "month-8" },
-  { label: "Sep", className: "month-9" },
-  { label: "Oct", className: "month-10" },
-  { label: "Nov", className: "month-11" },
-  { label: "Dic", className: "month-12" }
+  { label: "Enero", className: "month-1" },
+  { label: "Febrero", className: "month-2" },
+  { label: "Marzo", className: "month-3" },
+  { label: "Abril", className: "month-4" },
+  { label: "Mayo", className: "month-5" },
+  { label: "Junio", className: "month-6" },
+  { label: "Julio", className: "month-7" },
+  { label: "Agosto", className: "month-8" },
+  { label: "Septiembre", className: "month-9" },
+  { label: "Octubre", className: "month-10" },
+  { label: "Noviembre", className: "month-11" },
+  { label: "Diciembre", className: "month-12" }
 ];
 
 const formatIsoDate = (date) => date.toISOString().slice(0, 10);
@@ -191,10 +191,27 @@ function getSupabaseErrorMessage(error) {
   return [error.message, error.details, error.hint].filter(Boolean).join(" | ");
 }
 
+function showToast(message, type = "success") {
+  elements.toast.textContent = message;
+  elements.toast.classList.remove("success", "error");
+  elements.toast.classList.add(type, "show");
+  window.setTimeout(() => elements.toast.classList.remove("show"), 2600);
+}
+
+function showToastSuccess(message) {
+  showToast(message, "success");
+}
+
+function showToastError(message) {
+  showToast(message, "error");
+}
+
 function showError(message, error) {
   const detail = error ? getSupabaseErrorMessage(error) : "";
-  elements.errorBox.textContent = detail ? `${message}: ${detail}` : message;
+  const finalMessage = detail ? `${message}: ${detail}` : message;
+  elements.errorBox.textContent = finalMessage;
   elements.errorBox.hidden = false;
+  showToastError(message);
   console.error(message, error || "");
 }
 
@@ -203,10 +220,66 @@ function clearError() {
   elements.errorBox.hidden = true;
 }
 
-function showToast(message) {
-  elements.toast.textContent = message;
-  elements.toast.classList.add("show");
-  window.setTimeout(() => elements.toast.classList.remove("show"), 2600);
+function closeSystemModal(resolveValue = false) {
+  elements.systemModal.classList.remove("is-open");
+  window.setTimeout(() => {
+    elements.systemModal.hidden = true;
+    if (typeof elements.systemModal._resolve === "function") {
+      elements.systemModal._resolve(resolveValue);
+      elements.systemModal._resolve = null;
+    }
+  }, 140);
+}
+
+function showModalConfirm({
+  title = "Confirmar accion",
+  message = "",
+  confirmText = "Confirmar",
+  cancelText = "Cancelar",
+  variant = "warning"
+} = {}) {
+  elements.systemModalTitle.textContent = title;
+  elements.systemModalMessage.textContent = message;
+  elements.systemModalConfirm.textContent = confirmText;
+  elements.systemModalCancel.textContent = cancelText;
+  elements.systemModalIcon.textContent = variant === "success" ? "OK" : "!";
+  elements.systemModalIcon.className = `system-modal-icon ${variant}`;
+  elements.systemModal.hidden = false;
+  window.requestAnimationFrame(() => elements.systemModal.classList.add("is-open"));
+  elements.systemModalConfirm.focus();
+
+  return new Promise((resolve) => {
+    elements.systemModal._resolve = resolve;
+  });
+}
+
+function showModalSuccess(title = "Listo", message = "Operacion completada.") {
+  elements.systemModalCancel.hidden = true;
+  return showModalConfirm({
+    title,
+    message,
+    confirmText: "Cerrar",
+    variant: "success"
+  }).finally(() => {
+    elements.systemModalCancel.hidden = false;
+  });
+}
+
+function showModalError(title = "No se pudo completar", message = "Revisa el detalle e intenta nuevamente.") {
+  elements.systemModalCancel.hidden = true;
+  return showModalConfirm({
+    title,
+    message,
+    confirmText: "Cerrar",
+    variant: "error"
+  }).finally(() => {
+    elements.systemModalCancel.hidden = false;
+  });
+}
+
+function handleSystemModalKeydown(event) {
+  if (elements.systemModal.hidden) return;
+  if (event.key === "Escape") closeSystemModal(false);
 }
 
 function mapSupabaseLot(row) {
@@ -649,13 +722,19 @@ async function updateEntry(form) {
 async function deleteEntry(id) {
   const item = state.inventory.find((entry) => String(entry.id) === String(id));
   if (!item) return;
-  const confirmed = window.confirm(`Eliminar el lote de ${item.nombre}? Se marcara inactivo y se registrara movimiento de eliminacion.`);
+  const confirmed = await showModalConfirm({
+    title: "Eliminar lote",
+    message: `Eliminar el lote de ${item.nombre}? Se marcara inactivo y se registrara movimiento de eliminacion.`,
+    confirmText: "Eliminar",
+    cancelText: "Cancelar",
+    variant: "error"
+  });
   if (!confirmed) return;
 
   if (state.usingFallback) {
     state.inventory = state.inventory.filter((entry) => String(entry.id) !== String(id));
     render();
-    showToast("Eliminado en modo mock.");
+    showToastSuccess("Lote eliminado.");
     return;
   }
 
@@ -687,7 +766,7 @@ async function deleteEntry(id) {
   }
 
   await refreshInventory();
-  showToast("Eliminado.");
+  showToastSuccess("Lote eliminado.");
 }
 
 function createBulkInput(name, type = "text", value = "") {
@@ -846,7 +925,7 @@ async function markAlertReviewed(id) {
     const item = state.inventory.find((entry) => String(entry.id) === String(id));
     if (item) item.revisada = true;
     render();
-    showToast("Alerta revisada en modo mock. El inventario no fue modificado.");
+    showToastSuccess("Alerta revisada en modo mock. El inventario no fue modificado.");
     return;
   }
 
@@ -861,7 +940,7 @@ async function markAlertReviewed(id) {
   }
 
   await refreshInventory();
-  showToast("Alerta marcada como revisada. El stock no fue modificado.");
+  showToastSuccess("Cambios actualizados.");
 }
 
 function getDetailItems(type) {
@@ -935,6 +1014,13 @@ document.addEventListener("click", (event) => {
   if (detailButton) openDetailModal(detailButton.dataset.detail);
 });
 
+elements.systemModalCancel.addEventListener("click", () => closeSystemModal(false));
+elements.systemModalConfirm.addEventListener("click", () => closeSystemModal(true));
+elements.systemModal.addEventListener("click", (event) => {
+  if (event.target === elements.systemModal) closeSystemModal(false);
+});
+document.addEventListener("keydown", handleSystemModalKeydown);
+
 document.getElementById("newEntryBtn").addEventListener("click", openEntryModal);
 document.getElementById("closeEntryModal").addEventListener("click", closeEntryModal);
 document.getElementById("cancelEntry").addEventListener("click", closeEntryModal);
@@ -966,7 +1052,7 @@ elements.entryForm.addEventListener("submit", async (event) => {
   try {
     await createEntry(getFormPayload(elements.entryForm));
     closeEntryModal();
-    showToast("Guardadito.");
+    showToastSuccess("Guardadito.");
     await refreshInventory();
   } catch (error) {
     showError("No se pudo guardar el ingreso", error);
@@ -992,7 +1078,7 @@ elements.editForm.addEventListener("submit", async (event) => {
   try {
     await updateEntry(elements.editForm);
     closeEditModal();
-    showToast("Guardadito.");
+    showToastSuccess("Guardadito.");
     await refreshInventory();
   } catch (error) {
     showError("No se pudo editar el ingreso", error);
@@ -1035,7 +1121,7 @@ elements.saveBulkBtn.addEventListener("click", async () => {
     return;
   }
   if (!validRows.length) {
-    showToast("No hay filas validas para guardar.");
+    showToastError("No hay filas validas para guardar.");
     return;
   }
 
@@ -1063,7 +1149,7 @@ elements.saveBulkBtn.addEventListener("click", async () => {
     showError("Algunas filas no se pudieron guardar", { message: saveErrors.join(" | ") });
   }
   if (saved > 0) {
-    showToast("Guardadito.");
+    showToastSuccess("Guardadito.");
     await refreshInventory();
   }
   if (saved === validRows.length) closeBulkModal();
@@ -1077,8 +1163,11 @@ elements.detailModal.addEventListener("click", (event) => {
 });
 
 document.getElementById("importBtn").addEventListener("click", () => {
-  showToast("Importacion desde foto/Excel queda pendiente.");
+  showToastSuccess("Importacion desde foto/Excel queda pendiente.");
 });
 
 refreshInventory();
+
+
+
 
