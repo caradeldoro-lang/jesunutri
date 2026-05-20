@@ -111,7 +111,13 @@ const elements = {
   saveBulkBtn: document.getElementById("saveBulkBtn"),
   detailModal: document.getElementById("detailModal"),
   detailModalTitle: document.getElementById("detailModalTitle"),
-  detailTableBody: document.getElementById("detailTableBody")
+  detailTableBody: document.getElementById("detailTableBody"),
+  systemModal: document.getElementById("systemModal"),
+  systemModalIcon: document.getElementById("systemModalIcon"),
+  systemModalTitle: document.getElementById("systemModalTitle"),
+  systemModalMessage: document.getElementById("systemModalMessage"),
+  systemModalCancel: document.getElementById("systemModalCancel"),
+  systemModalConfirm: document.getElementById("systemModalConfirm")
 };
 
 function normalize(text) {
@@ -1167,6 +1173,7 @@ document.getElementById("importBtn").addEventListener("click", () => {
 });
 
 refreshInventory();
+
 
 
 
