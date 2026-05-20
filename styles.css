@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   color-scheme: dark;
   --bg: #090d14;
   --panel: #111827;
@@ -402,5 +402,124 @@ tbody tr:hover {
   .btn,
   .search-box {
     width: 100%;
+  }
+}
+
+.error-box {
+  border: 1px solid rgba(239, 83, 80, 0.55);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: rgba(239, 83, 80, 0.12);
+  color: #ffc4c2;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(5, 8, 13, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal {
+  width: min(680px, 100%);
+  max-height: min(760px, calc(100vh - 40px));
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111827;
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(21, 31, 47, 0.82);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.entry-form {
+  display: grid;
+  gap: 14px;
+}
+
+.entry-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.entry-form input,
+.entry-form select,
+.entry-form textarea {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  outline: none;
+  background: #0b1220;
+  color: var(--text);
+}
+
+.entry-form textarea {
+  min-height: 86px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
+.entry-form input:focus,
+.entry-form select:focus,
+.entry-form textarea:focus {
+  border-color: var(--blue);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn:disabled {
+  cursor: wait;
+  opacity: 0.64;
+  transform: none;
+}
+
+@media (max-width: 620px) {
+  .form-grid,
+  .form-actions {
+    grid-template-columns: 1fr;
+    display: grid;
   }
 }
