@@ -82,6 +82,12 @@ const state = {
   inventory: [],
   products: [],
   movements: [],
+  pendingEntries: [],
+  currentReview: null,
+  bulkSessionRows: [],
+  bulkEditingIndex: null,
+  operatorSessionRows: [],
+  operatorEditingIndex: null,
   lowStockProducts: [],
   deferredInstallPrompt: null,
   currentUser: null,
@@ -94,6 +100,18 @@ const elements = {
   loginError: document.getElementById("loginError"),
   loginBtn: document.getElementById("loginBtn"),
   appShell: document.getElementById("appShell"),
+  operatorShell: document.getElementById("operatorShell"),
+  operatorBulkErrorList: document.getElementById("operatorBulkErrorList"),
+  operatorReceiptDate: document.getElementById("operatorReceiptDate"),
+  operatorReceiptDisplay: document.getElementById("operatorReceiptDisplay"),
+  operatorProductForm: document.getElementById("operatorProductForm"),
+  operatorProductsCount: document.getElementById("operatorProductsCount"),
+  operatorProductsChips: document.getElementById("operatorProductsChips"),
+  operatorProductsList: document.getElementById("operatorProductsList"),
+  operatorPendingList: document.getElementById("operatorPendingList"),
+  sendPendingBtn: document.getElementById("sendPendingBtn"),
+  adminPendingList: document.getElementById("adminPendingList"),
+  pendingCount: document.getElementById("pendingCount"),
   totalItems: document.getElementById("totalItems"),
   soonItems: document.getElementById("soonItems"),
   expiredItems: document.getElementById("expiredItems"),
@@ -125,9 +143,13 @@ const elements = {
   editMonthPreview: document.getElementById("editMonthPreview"),
   saveEditBtn: document.getElementById("saveEditBtn"),
   bulkModal: document.getElementById("bulkModal"),
-  bulkTableBody: document.getElementById("bulkTableBody"),
   bulkErrorList: document.getElementById("bulkErrorList"),
   bulkReceiptDate: document.getElementById("bulkReceiptDate"),
+  bulkReceiptDisplay: document.getElementById("bulkReceiptDisplay"),
+  bulkProductForm: document.getElementById("bulkProductForm"),
+  bulkProductsCount: document.getElementById("bulkProductsCount"),
+  bulkProductsChips: document.getElementById("bulkProductsChips"),
+  bulkProductsList: document.getElementById("bulkProductsList"),
   saveBulkBtn: document.getElementById("saveBulkBtn"),
   useModal: document.getElementById("useModal"),
   useForm: document.getElementById("useForm"),
@@ -152,6 +174,14 @@ const elements = {
   saveProductSettingsBtn: document.getElementById("saveProductSettingsBtn"),
   installAppBtn: document.getElementById("installAppBtn"),
   installHint: document.getElementById("installHint"),
+  pendingReviewModal: document.getElementById("pendingReviewModal"),
+  pendingReviewTitle: document.getElementById("pendingReviewTitle"),
+  pendingReviewMeta: document.getElementById("pendingReviewMeta"),
+  pendingReviewTableBody: document.getElementById("pendingReviewTableBody"),
+  pendingReviewErrorList: document.getElementById("pendingReviewErrorList"),
+  pendingRejectReason: document.getElementById("pendingRejectReason"),
+  approvePendingBtn: document.getElementById("approvePendingBtn"),
+  rejectPendingBtn: document.getElementById("rejectPendingBtn"),
   detailModal: document.getElementById("detailModal"),
   detailModalTitle: document.getElementById("detailModalTitle"),
   detailTableBody: document.getElementById("detailTableBody"),
@@ -307,19 +337,35 @@ function clearLoginError() {
 function showLogin() {
   state.currentUser = null;
   elements.appShell.hidden = true;
+  elements.operatorShell.hidden = true;
   elements.loginScreen.hidden = false;
   elements.loginForm.elements.email.focus();
 }
 
-function showApp() {
+function showAdminApp() {
   elements.loginScreen.hidden = true;
+  elements.operatorShell.hidden = true;
   elements.appShell.hidden = false;
+}
+
+function showOperatorApp() {
+  elements.loginScreen.hidden = true;
+  elements.appShell.hidden = true;
+  elements.operatorShell.hidden = false;
+}
+
+function isAdmin() {
+  return state.currentUser?.rol === "admin";
+}
+
+function requireAdminAction() {
+  if (!isAdmin()) throw new Error("Accion disponible solo para admin.");
 }
 
 async function loadAuthorizedUser(authUser) {
   const { data, error } = await supabaseClient
     .from("usuarios_app")
-    .select("id,email,rol,activo")
+    .select("id,email,nombre,rol,activo")
     .eq("id", authUser.id)
     .maybeSingle();
 
@@ -332,6 +378,7 @@ async function loadAuthorizedUser(authUser) {
   state.currentUser = {
     id: data.id,
     email: data.email || authUser.email,
+    nombre: data.nombre || data.email || authUser.email,
     rol: data.rol
   };
   return state.currentUser;
@@ -339,8 +386,18 @@ async function loadAuthorizedUser(authUser) {
 
 async function startAuthenticatedApp(session) {
   await loadAuthorizedUser(session.user);
-  showApp();
-  await refreshInventory();
+  if (isAdmin()) {
+    showAdminApp();
+    await refreshInventory();
+    await loadAdminPendingEntries();
+    renderAdminPendingEntries();
+    return;
+  }
+
+  showOperatorApp();
+  await loadProductsFromSupabase();
+  setupOperatorEntryTable();
+  await loadOperatorPendingEntries();
 }
 
 async function checkInitialSession() {
@@ -993,6 +1050,210 @@ function isValidIsoDate(value) {
   return date.getFullYear() === year && date.getMonth() + 1 === month && date.getDate() === day;
 }
 
+function getExpiryFromParts(form) {
+  const day = form.elements.vence_dd.value.trim();
+  const month = form.elements.vence_mm.value.trim();
+  const year = form.elements.vence_yyyy.value.trim();
+  if (!day && !month && !year) return null;
+  if (!/^\d{1,2}$/.test(day) || !/^\d{1,2}$/.test(month) || !/^\d{4}$/.test(year)) {
+    throw new Error("Fecha de vencimiento invalida.");
+  }
+  const iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  if (!isValidIsoDate(iso)) throw new Error("Fecha de vencimiento invalida.");
+  return iso;
+}
+
+function getSelectedPosUnit(form) {
+  const extra = form.elements.unidad_extra.value;
+  if (extra) return extra;
+  return form.querySelector('input[name="unidad"]:checked')?.value || "";
+}
+
+function setSelectedPosUnit(form, unit) {
+  const main = [...form.querySelectorAll('input[name="unidad"]')].find((input) => input.value === unit);
+  form.elements.unidad_extra.value = "";
+  if (main) {
+    main.checked = true;
+    return;
+  }
+  form.querySelector('input[name="unidad"][value="kg"]').checked = true;
+  form.elements.unidad_extra.value = unit || "";
+}
+
+function getPosFormPayload(form, receiptDate) {
+  const nombre = form.elements.nombre.value.trim();
+  const cantidad = Number(form.elements.cantidad.value);
+  const unidad = getSelectedPosUnit(form);
+  const fechaVencimiento = getExpiryFromParts(form);
+
+  if (!nombre) throw new Error("Producto obligatorio.");
+  if (!cantidad || cantidad <= 0) throw new Error("Cantidad debe ser mayor que cero.");
+  if (!unidad) throw new Error("Unidad obligatoria.");
+  if (!isValidIsoDate(receiptDate)) throw new Error("Fecha recepcion invalida.");
+
+  return {
+    nombre,
+    nombreNormalizado: normalize(nombre),
+    cantidad,
+    unidad,
+    fechaRecepcion: receiptDate,
+    fechaVencimiento,
+    critico: form.elements.critico.checked,
+    lote: form.elements.lote.value.trim() || null,
+    observaciones: form.elements.observaciones.value.trim() || null
+  };
+}
+
+function getPosContext(kind) {
+  if (kind === "operator") {
+    return {
+      rows: state.operatorSessionRows,
+      setRows: (rows) => { state.operatorSessionRows = rows; },
+      editingKey: "operatorEditingIndex",
+      form: elements.operatorProductForm,
+      count: elements.operatorProductsCount,
+      chips: elements.operatorProductsChips,
+      list: elements.operatorProductsList,
+      errorList: elements.operatorBulkErrorList,
+      receiptInput: elements.operatorReceiptDate,
+      receiptDisplay: elements.operatorReceiptDisplay,
+      addButton: document.getElementById("operatorAddProductBtn")
+    };
+  }
+
+  return {
+    rows: state.bulkSessionRows,
+    setRows: (rows) => { state.bulkSessionRows = rows; },
+    editingKey: "bulkEditingIndex",
+    form: elements.bulkProductForm,
+    count: elements.bulkProductsCount,
+    chips: elements.bulkProductsChips,
+    list: elements.bulkProductsList,
+    errorList: elements.bulkErrorList,
+    receiptInput: elements.bulkReceiptDate,
+    receiptDisplay: elements.bulkReceiptDisplay,
+    addButton: document.getElementById("bulkAddProductBtn")
+  };
+}
+
+function renderPosSession(kind) {
+  const ctx = getPosContext(kind);
+  const rows = ctx.rows;
+  ctx.count.textContent = `Productos ingresados (${rows.length})`;
+  ctx.chips.innerHTML = rows.slice(0, 4).map((row) => `<span>${escapeHtml(row.nombre)} ${formatNumber(row.cantidad)} ${escapeHtml(row.unidad)}</span>`).join("");
+  ctx.list.innerHTML = rows.length
+    ? rows.map((row, index) => `
+      <article class="pos-added-item">
+        <div>
+          <strong>${escapeHtml(row.nombre)}</strong>
+          <span>${formatNumber(row.cantidad)} ${escapeHtml(row.unidad)} - vence ${formatDisplayDate(row.fechaVencimiento)}</span>
+          <span>Lote: ${escapeHtml(row.lote || "-")} ${row.critico ? "- CRITICO" : ""}</span>
+        </div>
+        <div class="row-actions">
+          <button class="btn small" type="button" data-pos-edit="${kind}" data-index="${index}">Editar</button>
+          <button class="btn small danger-btn" type="button" data-pos-delete="${kind}" data-index="${index}">Eliminar</button>
+        </div>
+      </article>
+    `).join("")
+    : '<div class="empty compact-empty">Aun no hay productos agregados.</div>';
+  ctx.addButton.textContent = state[ctx.editingKey] === null ? "Agregar producto" : "Guardar edición";
+}
+
+function resetPosSession(kind) {
+  const ctx = getPosContext(kind);
+  ctx.setRows([]);
+  state[ctx.editingKey] = null;
+  const today = formatIsoDate(new Date());
+  ctx.receiptInput.value = today;
+  ctx.receiptDisplay.textContent = formatReceiptDisplay(today);
+  ctx.errorList.hidden = true;
+  ctx.errorList.innerHTML = "";
+  clearPosForm(ctx.form);
+  renderPosSession(kind);
+}
+
+function addOrUpdatePosRow(kind) {
+  const ctx = getPosContext(kind);
+  try {
+    const payload = getPosFormPayload(ctx.form, ctx.receiptInput.value || formatIsoDate(new Date()));
+    const rows = [...ctx.rows];
+    if (state[ctx.editingKey] === null) {
+      rows.push(payload);
+    } else {
+      rows[state[ctx.editingKey]] = payload;
+    }
+    ctx.setRows(rows);
+    state[ctx.editingKey] = null;
+    ctx.errorList.hidden = true;
+    ctx.errorList.innerHTML = "";
+    clearPosForm(ctx.form);
+    renderPosSession(kind);
+  } catch (error) {
+    ctx.errorList.hidden = false;
+    ctx.errorList.innerHTML = `<div>${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function editPosRow(kind, index) {
+  const ctx = getPosContext(kind);
+  const row = ctx.rows[index];
+  if (!row) return;
+  state[ctx.editingKey] = index;
+  fillPosForm(ctx.form, row);
+  renderPosSession(kind);
+}
+
+function deletePosRow(kind, index) {
+  const ctx = getPosContext(kind);
+  ctx.setRows(ctx.rows.filter((_, rowIndex) => rowIndex !== index));
+  state[ctx.editingKey] = null;
+  renderPosSession(kind);
+}
+
+function clearPosForm(form) {
+  form.reset();
+  form.querySelector('input[name="unidad"][value="kg"]').checked = true;
+  form.elements.unidad_extra.value = "";
+  form.elements.nombre.focus();
+}
+
+function fillPosForm(form, row) {
+  form.elements.nombre.value = row.nombre || "";
+  form.elements.cantidad.value = row.cantidad || "";
+  setSelectedPosUnit(form, row.unidad || "kg");
+  form.elements.critico.checked = Boolean(row.critico);
+  form.elements.lote.value = row.lote || "";
+  form.elements.observaciones.value = row.observaciones || "";
+  if (row.fechaVencimiento) {
+    const [year, month, day] = row.fechaVencimiento.split("-");
+    form.elements.vence_dd.value = day;
+    form.elements.vence_mm.value = month;
+    form.elements.vence_yyyy.value = year;
+  } else {
+    form.elements.vence_dd.value = "";
+    form.elements.vence_mm.value = "";
+    form.elements.vence_yyyy.value = "";
+  }
+  form.elements.nombre.focus();
+}
+
+function formatReceiptDisplay(isoDate) {
+  return formatDisplayDate(isoDate).replaceAll("-", "/");
+}
+
+function setupDateAutoAdvance(form) {
+  ["vence_dd", "vence_mm"].forEach((name) => {
+    form.elements[name].addEventListener("input", () => {
+      const max = name === "vence_dd" ? 2 : 2;
+      if (form.elements[name].value.length >= max) {
+        const next = name === "vence_dd" ? form.elements.vence_mm : form.elements.vence_yyyy;
+        next.focus();
+        next.select?.();
+      }
+    });
+  });
+}
+
 function getFormPayload(form) {
   const formData = new FormData(form);
   const nombre = formData.get("nombre").trim();
@@ -1107,6 +1368,7 @@ async function findOrCreateProduct(payload) {
 }
 
 async function createEntry(payload) {
+  requireAdminAction();
   const product = await findOrCreateProduct(payload);
 
   const { data: lot, error: lotError } = await supabaseClient
@@ -1135,6 +1397,7 @@ async function createEntry(payload) {
       cantidad: payload.cantidad,
       unidad: payload.unidad,
       motivo: "Ingreso desde formulario web",
+      usuario_id: state.currentUser?.id || null,
       observacion: payload.observaciones
     });
 
@@ -1142,6 +1405,7 @@ async function createEntry(payload) {
 }
 
 async function updateEntry(form) {
+  requireAdminAction();
   const formData = new FormData(form);
   const loteId = formData.get("lote_id");
   const productoId = formData.get("producto_id");
@@ -1188,6 +1452,7 @@ async function updateEntry(form) {
 }
 
 async function deleteEntry(id) {
+  requireAdminAction();
   const item = state.inventory.find((entry) => String(entry.id) === String(id));
   if (!item) return;
   const confirmed = await showModalConfirm({
@@ -1361,6 +1626,7 @@ function closeUseModal() {
 }
 
 async function registerUse() {
+  requireAdminAction();
   const { nombre, product, cantidad, unidad } = getUseFormState();
   if (!nombre || !product) throw new Error("Producto obligatorio.");
   if (!cantidad || cantidad <= 0) throw new Error("La cantidad usada debe ser mayor que cero.");
@@ -1467,6 +1733,7 @@ function closeAdjustModal() {
 }
 
 async function registerAdjustment() {
+  requireAdminAction();
   if (state.usingFallback) throw new Error("No se puede ajustar inventario mientras Supabase esta en modo respaldo.");
 
   const { product } = getAdjustFormProduct();
@@ -1715,6 +1982,7 @@ function closeProductSettingsModal() {
 }
 
 async function saveProductSettings() {
+  requireAdminAction();
   if (state.usingFallback) throw new Error("No se puede configurar producto mientras Supabase esta en modo respaldo.");
 
   const form = elements.productSettingsForm;
@@ -1740,6 +2008,7 @@ async function saveProductSettings() {
 }
 
 async function toggleProductActive() {
+  requireAdminAction();
   if (state.usingFallback) throw new Error("No se puede pausar producto mientras Supabase esta en modo respaldo.");
 
   const productId = elements.productSettingsForm.elements.producto_id.value;
@@ -1820,58 +2089,13 @@ function createBulkInput(name, type = "text", value = "") {
   return input;
 }
 
-function addBulkRow(values = {}, focusFirst = false) {
-  const tr = document.createElement("tr");
-  BULK_COLUMNS.forEach((column) => {
-    const td = document.createElement("td");
-    const type = column === "cantidad" ? "number" : column === "unidad" ? "select" : column === "critico" ? "checkbox" : column.startsWith("fecha") ? "date" : "text";
-    td.appendChild(createBulkInput(column, type, values[column] ?? ""));
-    tr.appendChild(td);
-    if (column === "fecha_vencimiento") {
-      const monthTd = document.createElement("td");
-      monthTd.className = "bulk-month-cell";
-      monthTd.innerHTML = "";
-      tr.appendChild(monthTd);
-    }
-  });
-
-  const errorTd = document.createElement("td");
-  errorTd.className = "bulk-row-error";
-  errorTd.hidden = true;
-  tr.appendChild(errorTd);
-  elements.bulkTableBody.appendChild(tr);
-
-  if (focusFirst) tr.querySelector(".bulk-input").focus();
-  return tr;
-}
-
-function ensureBulkRows() {
-  elements.bulkTableBody.innerHTML = "";
-  for (let i = 0; i < 5; i += 1) addBulkRow();
-}
-
 function openBulkModal() {
-  ensureBulkRows();
-  elements.bulkReceiptDate.value = formatIsoDate(new Date());
-  elements.bulkErrorList.hidden = true;
-  elements.bulkErrorList.innerHTML = "";
+  resetPosSession("bulk");
   elements.bulkModal.hidden = false;
-  elements.bulkTableBody.querySelector(".bulk-input")?.focus();
 }
 
 function closeBulkModal() {
   elements.bulkModal.hidden = true;
-}
-
-function getBulkRows() {
-  return [...elements.bulkTableBody.querySelectorAll("tr")].map((tr) => {
-    const row = {};
-    BULK_COLUMNS.forEach((column) => {
-      const input = tr.querySelector(`[data-field="${column}"]`);
-      row[column] = input.type === "checkbox" ? input.checked : input.value;
-    });
-    return { tr, row };
-  });
 }
 
 function isBulkRowEmpty(row) {
@@ -1880,44 +2104,7 @@ function isBulkRowEmpty(row) {
     .every((column) => !row[column].trim());
 }
 
-function markBulkValidation(results) {
-  const messages = [];
-  results.forEach((result) => {
-    result.tr.classList.toggle("row-invalid", !result.valid);
-    const errorCell = result.tr.querySelector(".bulk-row-error");
-    errorCell.hidden = result.valid;
-    errorCell.textContent = result.valid ? "" : result.errors.join(", ");
-    if (!result.valid) messages.push(`Fila ${result.index}: ${result.errors.join(", ")}`);
-  });
-
-  elements.bulkErrorList.hidden = messages.length === 0;
-  elements.bulkErrorList.innerHTML = messages.map((message) => `<div>${escapeHtml(message)}</div>`).join("");
-}
-
-function validateBulkRows() {
-  const rows = getBulkRows().filter(({ row }) => !isBulkRowEmpty(row));
-  const results = rows.map(({ tr, row }, index) => ({
-    tr,
-    index: index + 1,
-    ...validateBulkRow(row)
-  }));
-  markBulkValidation(results);
-  return results;
-}
-
-function moveToNextBulkInput(currentInput) {
-  const inputs = [...elements.bulkTableBody.querySelectorAll(".bulk-input")];
-  const currentIndex = inputs.indexOf(currentInput);
-  const next = inputs[currentIndex + 1];
-  if (next) {
-    next.focus();
-    next.select?.();
-    return;
-  }
-  addBulkRow({}, true);
-}
-
-function pasteExcelData(event) {
+function pasteExcelDataForTable(event, tableBody) {
   const target = event.target.closest(".bulk-input");
   if (!target) return;
   const text = event.clipboardData.getData("text");
@@ -1927,12 +2114,12 @@ function pasteExcelData(event) {
   const rows = text.trimEnd().split(/\r?\n/).map((line) => line.split("\t"));
   const startCell = target.closest("td");
   const startRow = target.closest("tr");
-  const startRowIndex = [...elements.bulkTableBody.children].indexOf(startRow);
+  const startRowIndex = [...tableBody.children].indexOf(startRow);
   const startColumnIndex = [...startRow.children].filter((cell) => !cell.classList.contains("bulk-month-cell")).indexOf(startCell);
 
   rows.forEach((cells, rowOffset) => {
-    while (elements.bulkTableBody.children.length <= startRowIndex + rowOffset) addBulkRow();
-    const row = elements.bulkTableBody.children[startRowIndex + rowOffset];
+    while (tableBody.children.length <= startRowIndex + rowOffset) addPendingRow(tableBody);
+    const row = tableBody.children[startRowIndex + rowOffset];
     cells.forEach((cellValue, columnOffset) => {
       const columnName = BULK_COLUMNS[startColumnIndex + columnOffset];
       if (!columnName) return;
@@ -1949,7 +2136,287 @@ function pasteExcelData(event) {
   });
 }
 
+function addPendingRow(tableBody, values = {}, focusFirst = false, removable = false) {
+  const tr = document.createElement("tr");
+  BULK_COLUMNS.forEach((column) => {
+    const td = document.createElement("td");
+    const type = column === "cantidad" ? "number" : column === "unidad" ? "select" : column === "critico" ? "checkbox" : column.startsWith("fecha") ? "date" : "text";
+    td.appendChild(createBulkInput(column, type, values[column] ?? ""));
+    tr.appendChild(td);
+    if (column === "fecha_vencimiento") {
+      const monthTd = document.createElement("td");
+      monthTd.className = "bulk-month-cell";
+      monthTd.innerHTML = values.fecha_vencimiento ? renderMonthBadge(values.fecha_vencimiento) : "";
+      tr.appendChild(monthTd);
+    }
+  });
+
+  if (removable) {
+    const actionTd = document.createElement("td");
+    actionTd.innerHTML = '<button class="btn small danger-btn remove-row-btn" type="button" data-remove-pending-row>Quitar</button>';
+    tr.appendChild(actionTd);
+  }
+
+  tableBody.appendChild(tr);
+  if (focusFirst) tr.querySelector(".bulk-input")?.focus();
+  return tr;
+}
+
+function setupOperatorEntryTable() {
+  resetPosSession("operator");
+}
+
+function getPendingRows(tableBody) {
+  return [...tableBody.querySelectorAll("tr")].map((tr) => {
+    const row = {};
+    BULK_COLUMNS.forEach((column) => {
+      const input = tr.querySelector(`[data-field="${column}"]`);
+      row[column] = input?.type === "checkbox" ? input.checked : input?.value || "";
+    });
+    return { tr, row };
+  });
+}
+
+function validatePendingTableRows(tableBody, errorList, receiptDate = formatIsoDate(new Date())) {
+  const rows = getPendingRows(tableBody).filter(({ row }) => !isBulkRowEmpty(row));
+  const results = rows.map(({ tr, row }, index) => {
+    const errors = [];
+    const nombre = row.nombre.trim();
+    const cantidad = Number(row.cantidad);
+    const unidad = row.unidad.trim() || "kg";
+    const fechaVencimiento = row.fecha_vencimiento.trim() ? parseDateInput(row.fecha_vencimiento) : null;
+
+    if (!nombre) errors.push("producto obligatorio");
+    if (!cantidad || cantidad <= 0) errors.push("cantidad debe ser mayor que cero");
+    if (!UNIT_OPTIONS.includes(unidad)) errors.push("unidad invalida");
+    if (!isValidIsoDate(receiptDate)) errors.push("fecha recepcion invalida");
+    if (fechaVencimiento && !isValidIsoDate(fechaVencimiento)) errors.push("fecha vencimiento invalida");
+
+    return {
+      tr,
+      index: index + 1,
+      valid: errors.length === 0,
+      errors,
+      payload: {
+        nombre,
+        nombreNormalizado: normalize(nombre),
+        cantidad,
+        unidad,
+        fechaRecepcion: receiptDate,
+        fechaVencimiento,
+        critico: Boolean(row.critico),
+        lote: row.lote.trim() || null,
+        observaciones: row.observaciones.trim() || null
+      }
+    };
+  });
+
+  const messages = [];
+  results.forEach((result) => {
+    result.tr.classList.toggle("row-invalid", !result.valid);
+    if (!result.valid) messages.push(`Fila ${result.index}: ${result.errors.join(", ")}`);
+  });
+  errorList.hidden = messages.length === 0;
+  errorList.innerHTML = messages.map((message) => `<div>${escapeHtml(message)}</div>`).join("");
+  return results;
+}
+
+async function createPendingEntryFromOperator() {
+  if (state.currentUser?.rol !== "operador") throw new Error("Solo operadores pueden enviar ingresos pendientes desde esta vista.");
+  const receiptDate = elements.operatorReceiptDate.value || formatIsoDate(new Date());
+  const validRows = state.operatorSessionRows;
+  if (!validRows.length) throw new Error("Agrega al menos un producto.");
+
+  const { data: pending, error: pendingError } = await supabaseClient
+    .from("ingresos_pendientes")
+    .insert({
+      creado_por: state.currentUser.id,
+      creado_por_email: state.currentUser.email,
+      creado_por_nombre: state.currentUser.nombre,
+      fecha_recepcion: receiptDate,
+      observacion_general: null,
+      estado: "pendiente"
+    })
+    .select("id")
+    .single();
+
+  if (pendingError) throw pendingError;
+
+  const detailRows = validRows.map((payload) => ({
+    ingreso_pendiente_id: pending.id,
+    nombre: payload.nombre,
+    nombre_normalizado: payload.nombreNormalizado,
+    cantidad: payload.cantidad,
+    unidad: payload.unidad,
+    fecha_vencimiento: payload.fechaVencimiento,
+    lote: payload.lote,
+    critico: payload.critico,
+    observaciones: payload.observaciones
+  }));
+
+  const { error: detailError } = await supabaseClient
+    .from("ingresos_pendientes_detalle")
+    .insert(detailRows);
+
+  if (detailError) throw detailError;
+}
+
+async function fetchPendingEntries(scope = "operator") {
+  let query = supabaseClient
+    .from("ingresos_pendientes")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (scope === "operator") query = query.eq("creado_por", state.currentUser.id);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const ids = (data || []).map((entry) => entry.id);
+  let details = [];
+  if (ids.length) {
+    const { data: detailData, error: detailError } = await supabaseClient
+      .from("ingresos_pendientes_detalle")
+      .select("*")
+      .in("ingreso_pendiente_id", ids)
+      .order("created_at", { ascending: true });
+    if (detailError) throw detailError;
+    details = detailData || [];
+  }
+
+  return (data || []).map((entry) => ({
+    ...entry,
+    detalles: details.filter((detail) => detail.ingreso_pendiente_id === entry.id)
+  }));
+}
+
+async function loadOperatorPendingEntries() {
+  state.pendingEntries = await fetchPendingEntries("operator");
+  renderOperatorPendingEntries();
+}
+
+async function loadAdminPendingEntries() {
+  state.pendingEntries = await fetchPendingEntries("admin");
+}
+
+function renderOperatorPendingEntries() {
+  if (!state.pendingEntries.length) {
+    elements.operatorPendingList.innerHTML = '<div class="empty compact-empty">Aun no hay ingresos enviados.</div>';
+    return;
+  }
+
+  elements.operatorPendingList.innerHTML = state.pendingEntries
+    .map((entry) => `
+      <article class="pending-item">
+        <div>
+          <strong>${formatDisplayDate(entry.fecha_recepcion)}</strong>
+          <span>${entry.detalles.length} filas enviadas</span>
+          ${entry.motivo_rechazo ? `<span>${escapeHtml(entry.motivo_rechazo)}</span>` : ""}
+        </div>
+        <span class="pending-status ${entry.estado}">${escapeHtml(entry.estado)}</span>
+      </article>
+    `)
+    .join("");
+}
+
+function renderAdminPendingEntries() {
+  const pending = state.pendingEntries.filter((entry) => entry.estado === "pendiente");
+  elements.pendingCount.textContent = `${pending.length} pendientes`;
+  if (!state.pendingEntries.length) {
+    elements.adminPendingList.innerHTML = '<div class="empty compact-empty">No hay ingresos pendientes.</div>';
+    return;
+  }
+
+  elements.adminPendingList.innerHTML = state.pendingEntries
+    .map((entry) => `
+      <article class="pending-item">
+        <div>
+          <strong>${escapeHtml(entry.creado_por_nombre || entry.creado_por_email || "Operador")}</strong>
+          <span>Recepcion: ${formatDisplayDate(entry.fecha_recepcion)} - ${entry.detalles.length} filas</span>
+        </div>
+        <span class="pending-status ${entry.estado}">${escapeHtml(entry.estado)}</span>
+        <button class="btn small" type="button" data-review-pending="${entry.id}">Ver / Revisar</button>
+      </article>
+    `)
+    .join("");
+}
+
+function openPendingReview(id) {
+  const entry = state.pendingEntries.find((item) => item.id === id);
+  if (!entry) return;
+  state.currentReview = entry;
+  elements.pendingReviewTitle.textContent = "Ingreso pendiente";
+  elements.pendingReviewMeta.textContent = `${entry.creado_por_nombre || entry.creado_por_email || "Operador"} - Recepcion ${formatDisplayDate(entry.fecha_recepcion)}`;
+  elements.pendingReviewErrorList.hidden = true;
+  elements.pendingReviewErrorList.innerHTML = "";
+  elements.pendingRejectReason.value = "";
+  elements.pendingReviewTableBody.innerHTML = "";
+  entry.detalles.forEach((detail) => addPendingRow(elements.pendingReviewTableBody, {
+    nombre: detail.nombre,
+    cantidad: detail.cantidad,
+    unidad: detail.unidad,
+    fecha_vencimiento: detail.fecha_vencimiento || "",
+    lote: detail.lote || "",
+    critico: detail.critico,
+    observaciones: detail.observaciones || ""
+  }, false, true));
+  elements.pendingReviewModal.hidden = false;
+}
+
+function closePendingReviewModal() {
+  elements.pendingReviewModal.hidden = true;
+  state.currentReview = null;
+}
+
+async function approveCurrentPending() {
+  requireAdminAction();
+  if (!state.currentReview) throw new Error("No hay ingreso pendiente seleccionado.");
+  const results = validatePendingTableRows(elements.pendingReviewTableBody, elements.pendingReviewErrorList, state.currentReview.fecha_recepcion);
+  const validRows = results.filter((result) => result.valid);
+  if (!validRows.length) throw new Error("No hay filas validas para aprobar.");
+
+  for (const row of validRows) {
+    await createEntry({
+      ...row.payload,
+      observaciones: [row.payload.observaciones, "Aprobado desde ingreso pendiente"].filter(Boolean).join(" | ")
+    });
+  }
+
+  const { error } = await supabaseClient
+    .from("ingresos_pendientes")
+    .update({
+      estado: "aprobado",
+      aprobado_por: state.currentUser.id,
+      aprobado_por_email: state.currentUser.email,
+      aprobado_at: new Date().toISOString()
+    })
+    .eq("id", state.currentReview.id);
+
+  if (error) throw error;
+}
+
+async function rejectCurrentPending() {
+  requireAdminAction();
+  if (!state.currentReview) throw new Error("No hay ingreso pendiente seleccionado.");
+  const reason = elements.pendingRejectReason.value.trim();
+  if (!reason) throw new Error("Debes indicar motivo de rechazo.");
+
+  const { error } = await supabaseClient
+    .from("ingresos_pendientes")
+    .update({
+      estado: "rechazado",
+      rechazado_por: state.currentUser.id,
+      rechazado_por_email: state.currentUser.email,
+      rechazado_at: new Date().toISOString(),
+      motivo_rechazo: reason
+    })
+    .eq("id", state.currentReview.id);
+
+  if (error) throw error;
+}
+
 async function markAlertReviewed(id) {
+  requireAdminAction();
   if (state.usingFallback) {
     const item = state.inventory.find((entry) => String(entry.id) === String(id));
     if (item) item.revisada = true;
@@ -2042,6 +2509,30 @@ document.addEventListener("click", (event) => {
   const settingsButton = event.target.closest("[data-settings-product]");
   if (settingsButton) {
     openProductSettings(settingsButton.dataset.settingsProduct);
+    return;
+  }
+
+  const reviewPendingButton = event.target.closest("[data-review-pending]");
+  if (reviewPendingButton) {
+    openPendingReview(reviewPendingButton.dataset.reviewPending);
+    return;
+  }
+
+  const removePendingRowButton = event.target.closest("[data-remove-pending-row]");
+  if (removePendingRowButton) {
+    removePendingRowButton.closest("tr")?.remove();
+    return;
+  }
+
+  const posEditButton = event.target.closest("[data-pos-edit]");
+  if (posEditButton) {
+    editPosRow(posEditButton.dataset.posEdit, Number(posEditButton.dataset.index));
+    return;
+  }
+
+  const posDeleteButton = event.target.closest("[data-pos-delete]");
+  if (posDeleteButton) {
+    deletePosRow(posDeleteButton.dataset.posDelete, Number(posDeleteButton.dataset.index));
     return;
   }
 
@@ -2157,37 +2648,19 @@ elements.editForm.addEventListener("submit", async (event) => {
 document.getElementById("bulkEntryBtn").addEventListener("click", openBulkModal);
 document.getElementById("closeBulkModal").addEventListener("click", closeBulkModal);
 document.getElementById("cancelBulk").addEventListener("click", closeBulkModal);
-document.getElementById("addBulkRow").addEventListener("click", () => addBulkRow({}, true));
 elements.bulkModal.addEventListener("click", (event) => {
   if (event.target === elements.bulkModal) closeBulkModal();
 });
-elements.bulkTableBody.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter") return;
-  const input = event.target.closest(".bulk-input");
-  if (!input) return;
+elements.bulkProductForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  moveToNextBulkInput(input);
+  addOrUpdatePosRow("bulk");
 });
-elements.bulkTableBody.addEventListener("input", (event) => {
-  const input = event.target.closest(".bulk-input");
-  if (!input) return;
-  const row = input.closest("tr");
-  if (input.dataset.field === "nombre") maybeAutofillUnit(input, row.querySelector('[data-field="unidad"]'));
-  if (input.dataset.field === "fecha_vencimiento") row.querySelector(".bulk-month-cell").innerHTML = renderMonthBadge(input.value);
-});
-elements.bulkTableBody.addEventListener("paste", pasteExcelData);
 elements.saveBulkBtn.addEventListener("click", async () => {
   clearError();
-  const results = validateBulkRows();
-  const validRows = results.filter((result) => result.valid);
-
-  if (!results.length) {
-    elements.bulkErrorList.hidden = false;
-    elements.bulkErrorList.innerHTML = "<div>Agrega al menos una fila antes de guardar.</div>";
-    return;
-  }
+  const validRows = state.bulkSessionRows;
   if (!validRows.length) {
-    showToastError("No hay filas validas para guardar.");
+    elements.bulkErrorList.hidden = false;
+    elements.bulkErrorList.innerHTML = "<div>Agrega al menos un producto antes de guardar.</div>";
     return;
   }
 
@@ -2196,16 +2669,12 @@ elements.saveBulkBtn.addEventListener("click", async () => {
   let saved = 0;
   const saveErrors = [];
 
-  for (const row of validRows) {
+  for (const payload of validRows) {
     try {
-      await createEntry(row.payload);
+      await createEntry(payload);
       saved += 1;
     } catch (error) {
-      row.tr.classList.add("row-invalid");
-      const errorCell = row.tr.querySelector(".bulk-row-error");
-      errorCell.hidden = false;
-      errorCell.textContent = getSupabaseErrorMessage(error);
-      saveErrors.push(`Fila ${row.index}: ${getSupabaseErrorMessage(error)}`);
+      saveErrors.push(`${payload.nombre}: ${getSupabaseErrorMessage(error)}`);
     }
   }
 
@@ -2220,7 +2689,7 @@ elements.saveBulkBtn.addEventListener("click", async () => {
   }
   if (saved === validRows.length) closeBulkModal();
   elements.saveBulkBtn.disabled = false;
-  elements.saveBulkBtn.textContent = "Guardar filas validas";
+  elements.saveBulkBtn.textContent = "Guardar ingreso";
 });
 
 document.getElementById("closeDetailModal").addEventListener("click", closeDetailModal);
@@ -2255,6 +2724,35 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
   await supabaseClient.auth.signOut();
   showLogin();
 });
+document.getElementById("operatorLogoutBtn").addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+  showLogin();
+});
+
+elements.operatorProductForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  addOrUpdatePosRow("operator");
+});
+document.getElementById("operatorCancelEntry").addEventListener("click", () => {
+  resetPosSession("operator");
+});
+elements.sendPendingBtn.addEventListener("click", async () => {
+  elements.sendPendingBtn.disabled = true;
+  elements.sendPendingBtn.textContent = "Enviando...";
+  try {
+    await createPendingEntryFromOperator();
+    setupOperatorEntryTable();
+    await loadOperatorPendingEntries();
+    showToastSuccess("Ingreso enviado a revision.");
+  } catch (error) {
+    elements.operatorBulkErrorList.hidden = false;
+    elements.operatorBulkErrorList.innerHTML = `<div>${escapeHtml(getSupabaseErrorMessage(error))}</div>`;
+    showToastError("No se pudo enviar ingreso pendiente.");
+  } finally {
+    elements.sendPendingBtn.disabled = false;
+    elements.sendPendingBtn.textContent = "Enviar a revision";
+  }
+});
 
 document.getElementById("adjustStockBtn").addEventListener("click", () => openAdjustModal());
 document.getElementById("closeAdjustModal").addEventListener("click", closeAdjustModal);
@@ -2284,6 +2782,65 @@ elements.adjustForm.addEventListener("submit", async (event) => {
     elements.saveAdjustBtn.disabled = false;
     elements.saveAdjustBtn.textContent = "Guardar ajuste";
   }
+});
+
+document.getElementById("closePendingReviewModal").addEventListener("click", closePendingReviewModal);
+document.getElementById("cancelPendingReview").addEventListener("click", closePendingReviewModal);
+elements.pendingReviewModal.addEventListener("click", (event) => {
+  if (event.target === elements.pendingReviewModal) closePendingReviewModal();
+});
+document.getElementById("addPendingReviewRow").addEventListener("click", () => addPendingRow(elements.pendingReviewTableBody, {}, true, true));
+elements.pendingReviewTableBody.addEventListener("input", (event) => {
+  const input = event.target.closest(".bulk-input");
+  if (!input) return;
+  const row = input.closest("tr");
+  if (input.dataset.field === "nombre") maybeAutofillUnit(input, row.querySelector('[data-field="unidad"]'));
+  if (input.dataset.field === "fecha_vencimiento") row.querySelector(".bulk-month-cell").innerHTML = renderMonthBadge(input.value);
+});
+elements.pendingReviewTableBody.addEventListener("paste", (event) => pasteExcelDataForTable(event, elements.pendingReviewTableBody));
+elements.approvePendingBtn.addEventListener("click", async () => {
+  elements.approvePendingBtn.disabled = true;
+  elements.approvePendingBtn.textContent = "Aprobando...";
+  try {
+    await approveCurrentPending();
+    closePendingReviewModal();
+    await refreshInventory();
+    await loadAdminPendingEntries();
+    renderAdminPendingEntries();
+    showToastSuccess("Ingreso aprobado.");
+  } catch (error) {
+    showError("No se pudo aprobar ingreso", error);
+  } finally {
+    elements.approvePendingBtn.disabled = false;
+    elements.approvePendingBtn.textContent = "Aprobar ingreso";
+  }
+});
+elements.rejectPendingBtn.addEventListener("click", async () => {
+  elements.rejectPendingBtn.disabled = true;
+  elements.rejectPendingBtn.textContent = "Rechazando...";
+  try {
+    await rejectCurrentPending();
+    closePendingReviewModal();
+    await loadAdminPendingEntries();
+    renderAdminPendingEntries();
+    showToastSuccess("Ingreso rechazado.");
+  } catch (error) {
+    showError("No se pudo rechazar ingreso", error);
+  } finally {
+    elements.rejectPendingBtn.disabled = false;
+    elements.rejectPendingBtn.textContent = "Rechazar";
+  }
+});
+
+setupDateAutoAdvance(elements.bulkProductForm);
+setupDateAutoAdvance(elements.operatorProductForm);
+elements.bulkProductForm.elements.nombre.addEventListener("input", () => {
+  const product = findProductByName(elements.bulkProductForm.elements.nombre.value);
+  if (product?.unidad_default) setSelectedPosUnit(elements.bulkProductForm, product.unidad_default);
+});
+elements.operatorProductForm.elements.nombre.addEventListener("input", () => {
+  const product = findProductByName(elements.operatorProductForm.elements.nombre.value);
+  if (product?.unidad_default) setSelectedPosUnit(elements.operatorProductForm, product.unidad_default);
 });
 
 document.getElementById("exportBtn").addEventListener("click", openExportModal);
@@ -2379,6 +2936,12 @@ if ("serviceWorker" in navigator) {
 
 updateInstallUi();
 checkInitialSession();
+
+
+
+
+
+
 
 
 
