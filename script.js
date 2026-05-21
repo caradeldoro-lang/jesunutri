@@ -93,7 +93,6 @@ const elements = {
   expiredItems: document.getElementById("expiredItems"),
   lowStockItems: document.getElementById("lowStockItems"),
   criticalProductsList: document.getElementById("criticalProductsList"),
-  quickProductsList: document.getElementById("quickProductsList"),
   compactCriticalPanel: document.getElementById("compactCriticalPanel"),
   compactCriticalList: document.getElementById("compactCriticalList"),
   analyticsGrid: document.getElementById("analyticsGrid"),
@@ -231,6 +230,15 @@ function renderMonthBadge(isoDate) {
   const info = getMonthInfo(isoDate);
   if (!info) return '<span class="month-badge no-month">Sin fecha</span>';
   return `<span class="month-badge"><span class="month-dot ${info.className}"></span>${info.label} ${info.year}</span>`;
+}
+
+function getReadableTextColor(hexColor) {
+  const clean = hexColor.replace("#", "");
+  const red = parseInt(clean.slice(0, 2), 16);
+  const green = parseInt(clean.slice(2, 4), 16);
+  const blue = parseInt(clean.slice(4, 6), 16);
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+  return luminance > 0.58 ? "#111827" : "#ffffff";
 }
 
 function setMonthPreview(element, isoDate) {
@@ -688,23 +696,6 @@ function renderCompactCriticalView() {
     .join("");
 }
 
-function renderQuickProducts() {
-  const favorites = state.products.filter((product) => product.favorito);
-  if (!favorites.length) {
-    elements.quickProductsList.innerHTML = '<div class="empty compact-empty">Marca productos como favoritos para acceso rapido.</div>';
-    return;
-  }
-
-  elements.quickProductsList.innerHTML = favorites
-    .map((product) => `
-      <button class="quick-product-btn" type="button" data-favorite-use="${product.id}">
-        <strong>${escapeHtml(product.nombre)}</strong>
-        <span>${formatNumber(getProductStockTotal(product.id))} ${escapeHtml(product.unidad_default || "")}</span>
-      </button>
-    `)
-    .join("");
-}
-
 function renderUseFirst() {
   const items = getAlertItems();
   if (!items.length) {
@@ -882,12 +873,6 @@ function renderInventory() {
           <td>${escapeHtml(item.lote || "-")}</td>
           <td><span class="status ${status.key}">${status.label}</span></td>
           <td class="row-actions">
-            <button class="btn small" type="button" data-use-id="${item.id}">Usar</button>
-            <button class="btn small" type="button" data-quick-use="${item.productoId}" data-quick-qty="1">Usar 1</button>
-            <button class="btn small" type="button" data-quick-use="${item.productoId}" data-quick-qty="5">Usar 5</button>
-            <button class="btn small" type="button" data-quick-use="${item.productoId}" data-quick-qty="10">Usar 10</button>
-            <button class="btn small" type="button" data-adjust-id="${item.id}">Ajustar</button>
-            <button class="btn small" type="button" data-settings-product="${item.productoId}">Min</button>
             <button class="btn small" type="button" data-edit-id="${item.id}">Editar</button>
             <button class="btn small danger-btn" type="button" data-delete-id="${item.id}">Eliminar</button>
           </td>
@@ -901,7 +886,6 @@ function render() {
   updateMetrics();
   renderCriticalProducts();
   renderCompactCriticalView();
-  renderQuickProducts();
   renderUseFirst();
   renderAlerts();
   renderInventory();
@@ -1604,20 +1588,26 @@ function printSelectedLabels() {
     return;
   }
 
+  const logoUrl = new URL("logo.png", window.location.href).href;
   const labels = items.map((item) => {
     const month = getMonthInfo(item.fechaVencimiento);
-    return `
-      <article class="print-label">
+    const background = month ? month.color : "#8792a2";
+    const textColor = getReadableTextColor(background);
+    const copies = Math.max(1, Math.ceil(Number(item.cantidad || 1)));
+    return Array.from({ length: copies }, () => `
+      <article class="print-label" style="background:${background};color:${textColor};border-color:${textColor};">
+        <header class="print-label-top">
+          <img src="${logoUrl}" alt="Jesunutri">
+          <div class="print-month">
+            ${month ? `${month.label} ${month.year}` : "Sin fecha"}
+          </div>
+        </header>
         <h1>${escapeHtml(item.nombre)}</h1>
-        <div class="print-month">
-          <span style="background:${month ? month.color : "#8792a2"}"></span>
-          ${month ? `${month.label} ${month.year}` : "Sin fecha"}
-        </div>
         <p>Vence: ${formatDisplayDate(item.fechaVencimiento)}</p>
         <p>Lote: ${escapeHtml(item.lote || "sin lote")}</p>
-        <p>${item.cantidad} ${escapeHtml(item.unidad)} disponibles</p>
+        <p>Cantidad: ${formatNumber(item.cantidad)} ${escapeHtml(item.unidad)}</p>
       </article>
-    `;
+    `).join("");
   }).join("");
 
   const printWindow = window.open("", "_blank", "width=900,height=700");
@@ -1632,14 +1622,20 @@ function printSelectedLabels() {
         <meta charset="utf-8">
         <title>Etiquetas Jesunutri</title>
         <style>
-          body { margin: 0; padding: 18px; font-family: Arial, sans-serif; color: #111827; }
+          * { box-sizing: border-box; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          body { margin: 0; padding: 18px; font-family: Arial, sans-serif; color: #111827; background: #fff; }
           .sheet { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-          .print-label { min-height: 210px; border: 2px solid #111827; border-radius: 10px; padding: 16px; break-inside: avoid; }
-          h1 { margin: 0 0 12px; font-size: 28px; line-height: 1.05; }
+          .print-label { min-height: 210px; border: 2px solid; border-radius: 10px; padding: 14px; break-inside: avoid; page-break-inside: avoid; }
+          .print-label-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+          .print-label-top img { width: 84px; max-height: 42px; object-fit: contain; object-position: left top; }
+          h1 { margin: 0 0 12px; font-size: 30px; line-height: 1.05; text-transform: uppercase; }
           p { margin: 8px 0; font-size: 18px; }
-          .print-month { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 26px; font-weight: 900; }
-          .print-month span { width: 22px; height: 22px; border-radius: 999px; border: 1px solid #111827; }
-          @media print { body { padding: 0; } .sheet { gap: 0; } .print-label { border-radius: 0; } }
+          .print-month { font-size: 24px; font-weight: 900; text-align: right; text-transform: uppercase; }
+          @media print {
+            body { padding: 0; }
+            .sheet { gap: 0; }
+            .print-label { border-radius: 0; }
+          }
         </style>
       </head>
       <body><main class="sheet">${labels}</main></body>
@@ -1663,7 +1659,6 @@ function openProductSettings(productId) {
   elements.productSettingsForm.elements.stock_minimo.value = Number(product.stock_minimo || 0);
   elements.productSettingsForm.elements.unidad_default.value = product.unidad_default || "kg";
   elements.productSettingsForm.elements.consumo_promedio_diario.value = Number(product.consumo_promedio_diario || 0);
-  elements.productSettingsForm.elements.favorito.checked = Boolean(product.favorito);
   elements.productSettingsForm.elements.critico.checked = Boolean(product.critico);
   elements.productSettingsName.textContent = product.nombre;
   elements.pauseProductBtn.textContent = product.activo === false ? "Reactivar producto" : "Pausar producto";
@@ -1693,7 +1688,6 @@ async function saveProductSettings() {
       stock_minimo: stockMinimo,
       unidad_default: unidadDefault,
       consumo_promedio_diario: consumoPromedioDiario,
-      favorito: form.elements.favorito.checked,
       critico: form.elements.critico.checked
     })
     .eq("id", productId);
@@ -1728,19 +1722,6 @@ async function toggleProductActive() {
   await refreshInventory();
 }
 
-function openQuickUse(productId, quantity = "") {
-  const product = findProductById(productId);
-  if (!product) {
-    showToastError("Producto no encontrado.");
-    return;
-  }
-  openUseModal({
-    nombre: product.nombre,
-    unidad: product.unidad_default || "kg",
-    cantidadUsar: quantity
-  });
-}
-
 function exportBackupCsv() {
   downloadCsv("jesunutri_backup_inventario.csv", getExportRows("inventario"));
   downloadCsv("jesunutri_backup_productos.csv", state.products.map((product) => ({
@@ -1757,12 +1738,6 @@ function exportBackupCsv() {
   downloadCsv("jesunutri_backup_movimientos.csv", getExportRows("historial"));
   downloadCsv("jesunutri_backup_criticos.csv", getExportRows("criticos"));
   showToastSuccess("Backup CSV generado.");
-}
-
-function toggleScreenMode() {
-  document.body.classList.toggle("screen-mode");
-  const active = document.body.classList.contains("screen-mode");
-  document.getElementById("screenModeBtn").textContent = active ? "Salir pantalla" : "Modo pantalla";
 }
 
 function createBulkInput(name, type = "text", value = "") {
@@ -2020,35 +1995,9 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  const useButton = event.target.closest("[data-use-id]");
-  if (useButton) {
-    const item = state.inventory.find((entry) => String(entry.id) === String(useButton.dataset.useId));
-    if (item) openUseModal(item);
-    return;
-  }
-
-  const adjustButton = event.target.closest("[data-adjust-id]");
-  if (adjustButton) {
-    const item = state.inventory.find((entry) => String(entry.id) === String(adjustButton.dataset.adjustId));
-    if (item) openAdjustModal(item);
-    return;
-  }
-
   const settingsButton = event.target.closest("[data-settings-product]");
   if (settingsButton) {
     openProductSettings(settingsButton.dataset.settingsProduct);
-    return;
-  }
-
-  const quickUseButton = event.target.closest("[data-quick-use]");
-  if (quickUseButton) {
-    openQuickUse(quickUseButton.dataset.quickUse, quickUseButton.dataset.quickQty || "");
-    return;
-  }
-
-  const favoriteUseButton = event.target.closest("[data-favorite-use]");
-  if (favoriteUseButton) {
-    openQuickUse(favoriteUseButton.dataset.favoriteUse);
     return;
   }
 
@@ -2063,7 +2012,6 @@ elements.systemModal.addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", handleSystemModalKeydown);
 
-document.getElementById("newEntryBtn").addEventListener("click", openEntryModal);
 document.getElementById("closeEntryModal").addEventListener("click", closeEntryModal);
 document.getElementById("cancelEntry").addEventListener("click", closeEntryModal);
 elements.entryModal.addEventListener("click", (event) => {
@@ -2283,7 +2231,6 @@ elements.labelsModal.addEventListener("click", (event) => {
 elements.printLabelsBtn.addEventListener("click", printSelectedLabels);
 
 document.getElementById("backupBtn").addEventListener("click", exportBackupCsv);
-document.getElementById("screenModeBtn").addEventListener("click", toggleScreenMode);
 document.getElementById("criticalViewBtn").addEventListener("click", () => {
   elements.compactCriticalPanel.hidden = !elements.compactCriticalPanel.hidden;
 });
@@ -2328,10 +2275,6 @@ elements.productSettingsForm.addEventListener("submit", async (event) => {
   filter.addEventListener("change", renderHistory);
 });
 
-document.getElementById("importBtn").addEventListener("click", () => {
-  showToastSuccess("Importacion desde foto/Excel queda pendiente.");
-});
-
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
   state.deferredInstallPrompt = event;
@@ -2364,7 +2307,6 @@ if ("serviceWorker" in navigator) {
 
 updateInstallUi();
 refreshInventory();
-
 
 
 
