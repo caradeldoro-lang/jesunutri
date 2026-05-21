@@ -96,7 +96,6 @@ const elements = {
   compactCriticalPanel: document.getElementById("compactCriticalPanel"),
   compactCriticalList: document.getElementById("compactCriticalList"),
   analyticsGrid: document.getElementById("analyticsGrid"),
-  useFirstList: document.getElementById("useFirstList"),
   alertCount: document.getElementById("alertCount"),
   alertsList: document.getElementById("alertsList"),
   inventoryTable: document.getElementById("inventoryTable"),
@@ -696,31 +695,6 @@ function renderCompactCriticalView() {
     .join("");
 }
 
-function renderUseFirst() {
-  const items = getAlertItems();
-  if (!items.length) {
-    elements.useFirstList.innerHTML = '<div class="empty compact-empty">No hay lotes urgentes para rotar.</div>';
-    return;
-  }
-
-  elements.useFirstList.innerHTML = items
-    .slice(0, 8)
-    .map((item) => `
-      <article class="use-first-item ${item.status.key}">
-        <div>
-          <strong>${escapeHtml(item.nombre)}</strong>
-          <span>${escapeHtml(item.lote || "sin lote")} - ${item.cantidad} ${escapeHtml(item.unidad)}</span>
-          <b class="ops-badge ${item.status.key === "vencido" ? "urgente" : "soon"}">${item.status.key === "vencido" ? "CRITICO URGENTE" : "COMPRAR PRONTO"}</b>
-        </div>
-        <div class="use-first-meta">
-          ${renderMonthBadge(item.fechaVencimiento)}
-          <span>${formatDisplayDate(item.fechaVencimiento)} - ${formatDays(item.status.days)}</span>
-        </div>
-      </article>
-    `)
-    .join("");
-}
-
 function getFilteredMovements() {
   const productQuery = normalize(elements.historyProductFilter?.value || "");
   const type = elements.historyTypeFilter?.value || "";
@@ -886,7 +860,6 @@ function render() {
   updateMetrics();
   renderCriticalProducts();
   renderCompactCriticalView();
-  renderUseFirst();
   renderAlerts();
   renderInventory();
   renderHistory();
@@ -2307,6 +2280,7 @@ if ("serviceWorker" in navigator) {
 
 updateInstallUi();
 refreshInventory();
+
 
 
 
