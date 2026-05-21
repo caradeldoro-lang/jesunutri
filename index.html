@@ -70,11 +70,11 @@
               </label>
               <label class="critical-toggle">
                 <input name="critico" type="checkbox">
-                <span>CRITICO</span>
+                <span>Crítico</span>
               </label>
             </div>
 
-            <div class="pos-grid two">
+            <div class="pos-grid two qty-unit-row">
               <label class="pos-field">
                 <span>Cantidad</span>
                 <input name="cantidad" type="number" min="0.001" step="0.001" placeholder="12">
@@ -94,7 +94,7 @@
               </fieldset>
             </div>
 
-            <div class="pos-grid two">
+            <div class="pos-grid two date-lot-row">
               <fieldset class="expiry-box">
                 <legend>Vencimiento</legend>
                 <input name="vence_dd" inputmode="numeric" maxlength="2" placeholder="DD">
@@ -139,10 +139,10 @@
           <img class="header-logo" src="logo.png" alt="Jesunutri" width="360" height="120">
         </a>
         <div class="actions header-actions">
-          <button class="btn primary" type="button" id="bulkEntryBtn">Ingreso masivo</button>
-          <button class="btn use-stock-btn" type="button" id="useStockBtn">Stock consumido</button>
-          <button class="btn" type="button" id="labelsBtn">Etiquetas</button>
-          <button class="btn" type="button" id="adjustStockBtn">Ajuste inventario</button>
+          <button class="btn primary action-tile" type="button" id="bulkEntryBtn">Ingreso masivo</button>
+          <button class="btn use-stock-btn action-tile" type="button" id="useStockBtn">Stock consumido</button>
+          <button class="btn action-tile" type="button" id="labelsBtn">Etiquetas</button>
+          <button class="btn action-tile" type="button" id="adjustStockBtn">Ajuste inventario</button>
           <button class="btn small logout-btn" type="button" id="logoutBtn">Salir</button>
         </div>
       </header>
@@ -468,7 +468,6 @@
           <div class="modal-tools">
             <div class="receipt-display">Recepcion: <strong id="bulkReceiptDisplay"></strong></div>
             <input id="bulkReceiptDate" type="date" hidden>
-            <button class="icon-btn" type="button" id="closeBulkModal" aria-label="Cerrar">x</button>
           </div>
         </div>
 
@@ -490,11 +489,11 @@
             </label>
             <label class="critical-toggle">
               <input name="critico" type="checkbox">
-              <span>CRITICO</span>
+              <span>Crítico</span>
             </label>
           </div>
 
-          <div class="pos-grid two">
+          <div class="pos-grid two qty-unit-row">
             <label class="pos-field">
               <span>Cantidad</span>
               <input name="cantidad" type="number" min="0.001" step="0.001" placeholder="12">
@@ -514,7 +513,7 @@
             </fieldset>
           </div>
 
-          <div class="pos-grid two">
+          <div class="pos-grid two date-lot-row">
             <fieldset class="expiry-box">
               <legend>Vencimiento</legend>
               <input name="vence_dd" inputmode="numeric" maxlength="2" placeholder="DD">
