@@ -105,6 +105,7 @@ const elements = {
   operatorReceiptDate: document.getElementById("operatorReceiptDate"),
   operatorReceiptDisplay: document.getElementById("operatorReceiptDisplay"),
   operatorProductForm: document.getElementById("operatorProductForm"),
+  operatorProductsSummary: document.getElementById("operatorProductsSummary"),
   operatorProductsCount: document.getElementById("operatorProductsCount"),
   operatorProductsChips: document.getElementById("operatorProductsChips"),
   operatorProductsList: document.getElementById("operatorProductsList"),
@@ -147,6 +148,7 @@ const elements = {
   bulkReceiptDate: document.getElementById("bulkReceiptDate"),
   bulkReceiptDisplay: document.getElementById("bulkReceiptDisplay"),
   bulkProductForm: document.getElementById("bulkProductForm"),
+  bulkProductsSummary: document.getElementById("bulkProductsSummary"),
   bulkProductsCount: document.getElementById("bulkProductsCount"),
   bulkProductsChips: document.getElementById("bulkProductsChips"),
   bulkProductsList: document.getElementById("bulkProductsList"),
@@ -1085,10 +1087,12 @@ function getPosFormPayload(form, receiptDate) {
   const cantidad = Number(form.elements.cantidad.value);
   const unidad = getSelectedPosUnit(form);
   const fechaVencimiento = getExpiryFromParts(form);
+  const lote = form.elements.lote.value.trim();
 
   if (!nombre) throw new Error("Producto obligatorio.");
   if (!cantidad || cantidad <= 0) throw new Error("Cantidad debe ser mayor que cero.");
   if (!unidad) throw new Error("Unidad obligatoria.");
+  if (!lote) throw new Error("El lote es obligatorio.");
   if (!isValidIsoDate(receiptDate)) throw new Error("Fecha recepcion invalida.");
 
   return {
@@ -1099,7 +1103,7 @@ function getPosFormPayload(form, receiptDate) {
     fechaRecepcion: receiptDate,
     fechaVencimiento,
     critico: form.elements.critico.checked,
-    lote: form.elements.lote.value.trim() || null,
+    lote,
     observaciones: form.elements.observaciones.value.trim() || null
   };
 }
@@ -1111,6 +1115,7 @@ function getPosContext(kind) {
       setRows: (rows) => { state.operatorSessionRows = rows; },
       editingKey: "operatorEditingIndex",
       form: elements.operatorProductForm,
+      summary: elements.operatorProductsSummary,
       count: elements.operatorProductsCount,
       chips: elements.operatorProductsChips,
       list: elements.operatorProductsList,
@@ -1126,6 +1131,7 @@ function getPosContext(kind) {
     setRows: (rows) => { state.bulkSessionRows = rows; },
     editingKey: "bulkEditingIndex",
     form: elements.bulkProductForm,
+    summary: elements.bulkProductsSummary,
     count: elements.bulkProductsCount,
     chips: elements.bulkProductsChips,
     list: elements.bulkProductsList,
@@ -1168,6 +1174,7 @@ function resetPosSession(kind) {
   ctx.receiptDisplay.textContent = formatReceiptDisplay(today);
   ctx.errorList.hidden = true;
   ctx.errorList.innerHTML = "";
+  if (ctx.summary) ctx.summary.open = false;
   clearPosForm(ctx.form);
   renderPosSession(kind);
 }
@@ -1179,6 +1186,7 @@ function addOrUpdatePosRow(kind) {
     const rows = [...ctx.rows];
     if (state[ctx.editingKey] === null) {
       rows.push(payload);
+      if (ctx.summary) ctx.summary.open = false;
     } else {
       rows[state[ctx.editingKey]] = payload;
     }
@@ -2646,7 +2654,6 @@ elements.editForm.addEventListener("submit", async (event) => {
 });
 
 document.getElementById("bulkEntryBtn").addEventListener("click", openBulkModal);
-document.getElementById("closeBulkModal").addEventListener("click", closeBulkModal);
 document.getElementById("cancelBulk").addEventListener("click", closeBulkModal);
 elements.bulkModal.addEventListener("click", (event) => {
   if (event.target === elements.bulkModal) closeBulkModal();
@@ -2841,6 +2848,12 @@ elements.bulkProductForm.elements.nombre.addEventListener("input", () => {
 elements.operatorProductForm.elements.nombre.addEventListener("input", () => {
   const product = findProductByName(elements.operatorProductForm.elements.nombre.value);
   if (product?.unidad_default) setSelectedPosUnit(elements.operatorProductForm, product.unidad_default);
+});
+[elements.bulkProductsChips, elements.operatorProductsChips].forEach((chipList) => {
+  chipList?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
 });
 
 document.getElementById("exportBtn").addEventListener("click", openExportModal);
