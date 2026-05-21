@@ -15,7 +15,27 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <div class="app-shell">
+    <section class="login-screen" id="loginScreen">
+      <form class="login-card" id="loginForm">
+        <img src="logo.png" alt="Jesunutri" class="login-logo">
+        <div>
+          <h1>Ingreso</h1>
+          <p>Acceso privado al inventario de bodega.</p>
+        </div>
+        <label>
+          <span>Email</span>
+          <input name="email" type="email" autocomplete="email" required placeholder="jesu@admin.cl">
+        </label>
+        <label>
+          <span>Password</span>
+          <input name="password" type="password" autocomplete="current-password" required placeholder="Password">
+        </label>
+        <div class="login-error" id="loginError" hidden></div>
+        <button class="btn primary" type="submit" id="loginBtn">Ingresar</button>
+      </form>
+    </section>
+
+    <div class="app-shell" id="appShell" hidden>
       <header class="header-topbar app-header">
         <a class="logo-wrapper" href="./" aria-label="Jesunutri inicio">
           <img class="header-logo" src="logo.png" alt="Jesunutri" width="360" height="120">
@@ -25,6 +45,7 @@
           <button class="btn use-stock-btn" type="button" id="useStockBtn">Stock consumido</button>
           <button class="btn" type="button" id="labelsBtn">Etiquetas</button>
           <button class="btn" type="button" id="adjustStockBtn">Ajuste inventario</button>
+          <button class="btn small logout-btn" type="button" id="logoutBtn">Salir</button>
         </div>
       </header>
 
