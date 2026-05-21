@@ -14,6 +14,7 @@
         </a>
         <div class="actions header-actions">
           <button class="btn primary" type="button" id="newEntryBtn">Nuevo ingreso</button>
+          <button class="btn" type="button" id="useStockBtn">Registrar uso</button>
           <button class="btn" type="button" id="bulkEntryBtn">Ingreso masivo</button>
           <button class="btn" type="button" id="importBtn">Importar desde foto/Excel</button>
         </div>
@@ -266,6 +267,87 @@
       </section>
     </div>
 
+    <div class="modal-backdrop" id="useModal" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="useModalTitle">
+        <form id="useForm" class="entry-form">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow">Salida de stock</p>
+              <h2 id="useModalTitle">Registrar uso</h2>
+              <p class="modal-copy">El sistema descuenta automaticamente por FIFO.</p>
+            </div>
+            <button class="icon-btn" type="button" id="closeUseModal" aria-label="Cerrar">x</button>
+          </div>
+
+          <label>
+            <span>Producto</span>
+            <input name="nombre" type="text" list="productSuggestions" autocomplete="off" required placeholder="Ej: Harina fuerza">
+          </label>
+
+          <div class="form-grid">
+            <label>
+              <span>Cantidad usada</span>
+              <input name="cantidad" type="number" min="0.001" step="0.001" required placeholder="0">
+            </label>
+            <label>
+              <span>Unidad</span>
+              <select name="unidad" required>
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="lt">lt</option>
+                <option value="ml">ml</option>
+                <option value="unidad">unidad</option>
+                <option value="caja">caja</option>
+                <option value="paquete">paquete</option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            <span>Motivo/observacion</span>
+            <textarea name="observacion" rows="2" placeholder="Opcional"></textarea>
+          </label>
+
+          <label class="check-row">
+            <input name="usar_lote_especifico" type="checkbox">
+            <span>Usar lote especifico</span>
+          </label>
+
+          <div class="manual-lot-panel" id="manualLotPanel" hidden>
+            <label>
+              <span>Lote especifico</span>
+              <select name="lote_especifico"></select>
+            </label>
+            <label>
+              <span>Motivo desviacion FIFO</span>
+              <select name="motivo_desviacion">
+                <option value="">Seleccionar motivo</option>
+                <option value="lote recomendado no encontrado">lote recomendado no encontrado</option>
+                <option value="envase abierto">envase abierto</option>
+                <option value="lote dañado">lote dañado</option>
+                <option value="ubicacion fisica distinta">ubicacion fisica distinta</option>
+                <option value="instruccion de supervisor">instruccion de supervisor</option>
+                <option value="otro">otro</option>
+              </select>
+            </label>
+            <div class="fifo-warning" id="fifoDeviationWarning" hidden>Estas usando un lote distinto al recomendado.</div>
+          </div>
+
+          <div class="fifo-summary">
+            <h3>Se descontara desde estos lotes:</h3>
+            <div id="fifoSummaryList" class="fifo-summary-list">
+              <div class="empty">Selecciona producto y cantidad para calcular FIFO.</div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn" type="button" id="cancelUse">Cancelar</button>
+            <button class="btn primary" type="submit" id="confirmUseBtn">Confirmar uso</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div class="modal-backdrop" id="detailModal" hidden>
       <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
         <div class="modal-header">
@@ -316,7 +398,6 @@
     <script src="script.js"></script>
   </body>
 </html>
-
 
 
 
