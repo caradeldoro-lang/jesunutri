@@ -21,22 +21,16 @@
           <img class="header-logo" src="logo.png" alt="Jesunutri" width="360" height="120">
         </a>
         <div class="actions header-actions">
-          <button class="btn primary" type="button" id="newEntryBtn">Nuevo ingreso</button>
+          <button class="btn primary" type="button" id="bulkEntryBtn">Ingreso masivo</button>
           <button class="btn use-stock-btn" type="button" id="useStockBtn">Stock consumido</button>
           <button class="btn" type="button" id="adjustStockBtn">Ajuste inventario</button>
-          <button class="btn" type="button" id="bulkEntryBtn">Ingreso masivo</button>
-          <button class="btn" type="button" id="exportBtn">Exportar</button>
-          <button class="btn" type="button" id="backupBtn">Backup CSV</button>
-          <button class="btn" type="button" id="labelsBtn">Etiquetas</button>
-          <button class="btn" type="button" id="screenModeBtn">Modo pantalla</button>
-          <button class="btn install-btn" type="button" id="installAppBtn" hidden>Instalar app</button>
-          <button class="btn" type="button" id="importBtn">Importar desde foto/Excel</button>
         </div>
       </header>
 
       <div class="error-box" id="errorBox" hidden></div>
       <div class="install-hint" id="installHint" hidden>
-        Para instalar en tablet: Chrome -> menu -> Agregar a pantalla principal.
+        <span>Para instalar en tablet: Chrome -> menu -> Agregar a pantalla principal.</span>
+        <button class="btn install-btn" type="button" id="installAppBtn" hidden>Instalar app</button>
       </div>
 
       <main>
@@ -72,16 +66,6 @@
             <button class="btn small" type="button" id="criticalViewBtn">Vista criticos</button>
           </div>
           <div class="critical-list" id="criticalProductsList"></div>
-        </section>
-
-        <section class="panel quick-products-panel">
-          <div class="section-heading compact-heading">
-            <div>
-              <h2>Productos rapidos</h2>
-              <p>Favoritos para registrar consumo con menos escritura.</p>
-            </div>
-          </div>
-          <div class="quick-products-list" id="quickProductsList"></div>
         </section>
 
         <section class="panel compact-critical-panel" id="compactCriticalPanel" hidden>
@@ -195,6 +179,20 @@
             </div>
           </div>
           <div class="analytics-grid" id="analyticsGrid"></div>
+        </section>
+
+        <section class="panel tools-panel">
+          <div class="section-heading compact-heading">
+            <div>
+              <h2>Herramientas</h2>
+              <p>Opciones secundarias para exportar, respaldar e imprimir.</p>
+            </div>
+          </div>
+          <div class="actions tools-actions">
+            <button class="btn" type="button" id="exportBtn">Exportar</button>
+            <button class="btn" type="button" id="backupBtn">Backup CSV</button>
+            <button class="btn" type="button" id="labelsBtn">Etiquetas</button>
+          </div>
         </section>
       </main>
     </div>
@@ -615,11 +613,6 @@
           <label>
             <span>Consumo promedio diario</span>
             <input name="consumo_promedio_diario" type="number" min="0" step="0.001" required>
-          </label>
-
-          <label class="check-row">
-            <input name="favorito" type="checkbox">
-            <span>Producto rapido / favorito</span>
           </label>
 
           <label class="check-row">
