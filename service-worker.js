@@ -1,4 +1,4 @@
-const CACHE_NAME = "jesunutri-pwa-v1";
+const CACHE_NAME = "jesunutri-pwa-v2";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
@@ -61,3 +61,4 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(cacheFirst(event.request));
   }
 });
+
