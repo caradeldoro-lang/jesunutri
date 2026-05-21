@@ -109,6 +109,12 @@ const elements = {
   bulkErrorList: document.getElementById("bulkErrorList"),
   bulkReceiptDate: document.getElementById("bulkReceiptDate"),
   saveBulkBtn: document.getElementById("saveBulkBtn"),
+  useModal: document.getElementById("useModal"),
+  useForm: document.getElementById("useForm"),
+  manualLotPanel: document.getElementById("manualLotPanel"),
+  fifoDeviationWarning: document.getElementById("fifoDeviationWarning"),
+  fifoSummaryList: document.getElementById("fifoSummaryList"),
+  confirmUseBtn: document.getElementById("confirmUseBtn"),
   detailModal: document.getElementById("detailModal"),
   detailModalTitle: document.getElementById("detailModalTitle"),
   detailTableBody: document.getElementById("detailTableBody"),
@@ -488,6 +494,7 @@ function renderInventory() {
           <td>${escapeHtml(item.lote || "-")}</td>
           <td><span class="status ${status.key}">${status.label}</span></td>
           <td class="row-actions">
+            <button class="btn small" type="button" data-use-id="${item.id}">Usar</button>
             <button class="btn small" type="button" data-edit-id="${item.id}">Editar</button>
             <button class="btn small danger-btn" type="button" data-delete-id="${item.id}">Eliminar</button>
           </td>
@@ -776,6 +783,184 @@ async function deleteEntry(id) {
   showToastSuccess("Lote eliminado.");
 }
 
+function getProductLotsForUse(productId, unidad) {
+  return state.inventory
+    .filter((item) => String(item.productoId) === String(productId))
+    .filter((item) => item.cantidad > 0)
+    .filter((item) => !unidad || item.unidad === unidad)
+    .sort((a, b) => {
+      if (!a.fechaVencimiento && !b.fechaVencimiento) return 0;
+      if (!a.fechaVencimiento) return 1;
+      if (!b.fechaVencimiento) return -1;
+      return a.fechaVencimiento.localeCompare(b.fechaVencimiento);
+    });
+}
+
+function buildFifoPlan(productId, cantidad, unidad) {
+  const lots = getProductLotsForUse(productId, unidad);
+  const totalAvailable = lots.reduce((sum, lot) => sum + Number(lot.cantidad), 0);
+  const plan = [];
+  let remaining = cantidad;
+
+  for (const lot of lots) {
+    if (remaining <= 0) break;
+    const consume = Math.min(Number(lot.cantidad), remaining);
+    plan.push({ lot, cantidad: Number(consume.toFixed(3)) });
+    remaining = Number((remaining - consume).toFixed(3));
+  }
+
+  return {
+    lots,
+    plan,
+    totalAvailable,
+    remaining,
+    recommendedLot: lots[0] || null,
+    sufficient: cantidad > 0 && remaining <= 0
+  };
+}
+
+function renderFifoPlan(planResult, manualLot = null, manualQuantity = 0) {
+  if (!planResult || (!planResult.plan.length && !manualLot)) {
+    elements.fifoSummaryList.innerHTML = '<div class="empty">Selecciona producto y cantidad para calcular FIFO.</div>';
+    return;
+  }
+
+  const rows = manualLot
+    ? [{ lot: manualLot, cantidad: manualQuantity }]
+    : planResult.plan;
+
+  elements.fifoSummaryList.innerHTML = rows
+    .map(({ lot, cantidad }, index) => `
+      <div class="fifo-row ${index === 0 ? "recommended" : ""}">
+        <div>
+          <strong>${index === 0 ? "Lote recomendado por FIFO" : "Continuacion FIFO"}</strong>
+          <span>lote ${escapeHtml(lot.lote || "sin lote")} - disponible ${lot.cantidad} ${escapeHtml(lot.unidad)}</span>
+        </div>
+        <div>${formatDisplayDate(lot.fechaVencimiento)}</div>
+        <div>${renderMonthBadge(lot.fechaVencimiento)}</div>
+        <div><strong>${cantidad} ${escapeHtml(lot.unidad)}</strong></div>
+      </div>
+    `)
+    .join("");
+}
+
+function getUseFormState() {
+  const nombre = elements.useForm.elements.nombre.value.trim();
+  const product = findProductByName(nombre);
+  const cantidad = Number(elements.useForm.elements.cantidad.value);
+  const unidad = elements.useForm.elements.unidad.value;
+  return { nombre, product, cantidad, unidad };
+}
+
+function populateManualLots(lots) {
+  const select = elements.useForm.elements.lote_especifico;
+  const currentValue = select.value;
+  select.innerHTML = lots
+    .map((lot) => `<option value="${lot.id}">${escapeHtml(lot.lote || "sin lote")} - ${formatDisplayDate(lot.fechaVencimiento)} - ${lot.cantidad} ${escapeHtml(lot.unidad)}</option>`)
+    .join("");
+  if (currentValue && lots.some((lot) => String(lot.id) === currentValue)) select.value = currentValue;
+}
+
+function updateUseSummary() {
+  const { product, cantidad, unidad } = getUseFormState();
+  if (!product || !cantidad || cantidad <= 0) {
+    renderFifoPlan(null);
+    populateManualLots([]);
+    return null;
+  }
+
+  const planResult = buildFifoPlan(product.id, cantidad, unidad);
+  populateManualLots(planResult.lots);
+
+  const useSpecific = elements.useForm.elements.usar_lote_especifico.checked;
+  elements.manualLotPanel.hidden = !useSpecific;
+
+  if (useSpecific) {
+    const selectedLot = planResult.lots.find((lot) => String(lot.id) === String(elements.useForm.elements.lote_especifico.value));
+    const isDeviation = selectedLot && planResult.recommendedLot && String(selectedLot.id) !== String(planResult.recommendedLot.id);
+    elements.fifoDeviationWarning.hidden = !isDeviation;
+    renderFifoPlan(planResult, selectedLot, cantidad);
+  } else {
+    elements.fifoDeviationWarning.hidden = true;
+    renderFifoPlan(planResult);
+  }
+
+  return planResult;
+}
+
+function openUseModal(prefillItem = null) {
+  elements.useForm.reset();
+  if (prefillItem) {
+    elements.useForm.elements.nombre.value = prefillItem.nombre;
+    elements.useForm.elements.unidad.value = prefillItem.unidad;
+  }
+  elements.manualLotPanel.hidden = true;
+  elements.fifoDeviationWarning.hidden = true;
+  updateUseSummary();
+  elements.useModal.hidden = false;
+  elements.useForm.elements.nombre.focus();
+}
+
+function closeUseModal() {
+  elements.useModal.hidden = true;
+}
+
+async function registerUse() {
+  const { nombre, product, cantidad, unidad } = getUseFormState();
+  if (!nombre || !product) throw new Error("Producto obligatorio.");
+  if (!cantidad || cantidad <= 0) throw new Error("La cantidad usada debe ser mayor que cero.");
+
+  const planResult = buildFifoPlan(product.id, cantidad, unidad);
+  if (!planResult.sufficient) {
+    throw new Error(`Stock insuficiente. Disponible: ${planResult.totalAvailable} ${unidad}`);
+  }
+
+  const observation = elements.useForm.elements.observacion.value.trim() || null;
+  const useSpecific = elements.useForm.elements.usar_lote_especifico.checked;
+  let movements = [];
+
+  if (useSpecific) {
+    const selectedLot = planResult.lots.find((lot) => String(lot.id) === String(elements.useForm.elements.lote_especifico.value));
+    if (!selectedLot) throw new Error("Selecciona un lote especifico.");
+    if (cantidad > selectedLot.cantidad) throw new Error(`Stock insuficiente en lote seleccionado. Disponible: ${selectedLot.cantidad} ${unidad}`);
+
+    const recommendedLot = planResult.recommendedLot;
+    const isDeviation = recommendedLot && String(selectedLot.id) !== String(recommendedLot.id);
+    const reason = elements.useForm.elements.motivo_desviacion.value;
+    if (isDeviation && !reason) throw new Error("Debes indicar motivo de desviacion FIFO.");
+
+    movements = [{
+      producto_id: product.id,
+      lote_id: selectedLot.id,
+      tipo_movimiento: "consumo",
+      cantidad,
+      unidad,
+      motivo: isDeviation ? reason : "Consumo FIFO",
+      observacion: observation,
+      desviacion_fifo: Boolean(isDeviation),
+      lote_recomendado_id: recommendedLot?.id || selectedLot.id
+    }];
+  } else {
+    movements = planResult.plan.map(({ lot, cantidad: lotQuantity }) => ({
+      producto_id: product.id,
+      lote_id: lot.id,
+      tipo_movimiento: "consumo",
+      cantidad: lotQuantity,
+      unidad,
+      motivo: "Consumo FIFO",
+      observacion: observation,
+      desviacion_fifo: false,
+      lote_recomendado_id: lot.id
+    }));
+  }
+
+  const { error } = await supabaseClient
+    .from("movimientos_inventario")
+    .insert(movements);
+
+  if (error) throw error;
+}
+
 function createBulkInput(name, type = "text", value = "") {
   const input = document.createElement(type === "select" ? "select" : "input");
   input.dataset.field = name;
@@ -1017,6 +1202,13 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const useButton = event.target.closest("[data-use-id]");
+  if (useButton) {
+    const item = state.inventory.find((entry) => String(entry.id) === String(useButton.dataset.useId));
+    if (item) openUseModal(item);
+    return;
+  }
+
   const detailButton = event.target.closest("[data-detail]");
   if (detailButton) openDetailModal(detailButton.dataset.detail);
 });
@@ -1033,6 +1225,38 @@ document.getElementById("closeEntryModal").addEventListener("click", closeEntryM
 document.getElementById("cancelEntry").addEventListener("click", closeEntryModal);
 elements.entryModal.addEventListener("click", (event) => {
   if (event.target === elements.entryModal) closeEntryModal();
+});
+
+document.getElementById("useStockBtn").addEventListener("click", () => openUseModal());
+document.getElementById("closeUseModal").addEventListener("click", closeUseModal);
+document.getElementById("cancelUse").addEventListener("click", closeUseModal);
+elements.useModal.addEventListener("click", (event) => {
+  if (event.target === elements.useModal) closeUseModal();
+});
+elements.useForm.elements.nombre.addEventListener("input", () => {
+  maybeAutofillUnit(elements.useForm.elements.nombre, elements.useForm.elements.unidad);
+  updateUseSummary();
+});
+elements.useForm.elements.cantidad.addEventListener("input", updateUseSummary);
+elements.useForm.elements.unidad.addEventListener("change", updateUseSummary);
+elements.useForm.elements.usar_lote_especifico.addEventListener("change", updateUseSummary);
+elements.useForm.elements.lote_especifico.addEventListener("change", updateUseSummary);
+elements.useForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearError();
+  elements.confirmUseBtn.disabled = true;
+  elements.confirmUseBtn.textContent = "Registrando...";
+  try {
+    await registerUse();
+    closeUseModal();
+    showToastSuccess("Uso registrado.");
+    await refreshInventory();
+  } catch (error) {
+    showError("No se pudo registrar el uso", error);
+  } finally {
+    elements.confirmUseBtn.disabled = false;
+    elements.confirmUseBtn.textContent = "Confirmar uso";
+  }
 });
 
 elements.entryForm.elements.nombre.addEventListener("input", () => {
@@ -1174,9 +1398,6 @@ document.getElementById("importBtn").addEventListener("click", () => {
 });
 
 refreshInventory();
-
-
-
 
 
 
