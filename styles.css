@@ -27,6 +27,74 @@ body {
 
 button, input, select, textarea { font: inherit; }
 
+[hidden] { display: none !important; }
+
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.login-logo {
+  width: min(280px, 72vw);
+  height: auto;
+  object-fit: contain;
+}
+
+.login-card h1 {
+  margin-bottom: 6px;
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+
+.login-card p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.login-card label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.login-card input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  outline: none;
+  background: #0b1220;
+  color: var(--text);
+}
+
+.login-card input:focus {
+  border-color: var(--blue);
+}
+
+.login-error {
+  border: 1px solid rgba(239, 83, 80, 0.55);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(239, 83, 80, 0.12);
+  color: #ffc4c2;
+  font-size: 0.86rem;
+}
+
 .app-shell {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
@@ -140,6 +208,10 @@ h2 { margin-bottom: 6px; font-size: 1.1rem; }
 }
 .btn.small { min-height: 32px; padding: 0 10px; font-size: 0.78rem; }
 .btn.danger-btn { border-color: rgba(239, 83, 80, 0.42); color: #ffc4c2; }
+.btn.logout-btn {
+  border-color: rgba(135, 146, 162, 0.28);
+  color: #cbd5e1;
+}
 .btn:disabled { cursor: wait; opacity: 0.64; transform: none; }
 .btn.install-btn {
   border-color: rgba(35, 196, 131, 0.42);
