@@ -150,6 +150,10 @@ h2 { margin-bottom: 6px; font-size: 1.1rem; }
 .btn.install-btn[hidden] { display: none; }
 
 .install-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   border: 1px solid rgba(79, 140, 255, 0.28);
   border-radius: 8px;
   margin-bottom: 16px;
@@ -207,9 +211,9 @@ h2 { margin-bottom: 6px; font-size: 1.1rem; }
   padding: 14px;
 }
 
-.quick-products-panel,
 .compact-critical-panel,
-.analytics-panel {
+.analytics-panel,
+.tools-panel {
   padding: 14px;
 }
 
@@ -223,39 +227,6 @@ h2 { margin-bottom: 6px; font-size: 1.1rem; }
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-}
-
-.quick-products-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.quick-product-btn {
-  min-width: 128px;
-  border: 1px solid rgba(79, 140, 255, 0.28);
-  border-radius: 8px;
-  padding: 11px 12px;
-  background: rgba(21, 31, 47, 0.72);
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.quick-product-btn:hover {
-  border-color: rgba(79, 140, 255, 0.8);
-  background: rgba(31, 43, 63, 0.95);
-}
-
-.quick-product-btn strong,
-.quick-product-btn span {
-  display: block;
-}
-
-.quick-product-btn span {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 0.82rem;
 }
 
 .compact-critical-list {
@@ -470,8 +441,11 @@ table { width: 100%; border-collapse: collapse; min-width: 980px; }
 th, td { border-bottom: 1px solid var(--line); padding: 13px 12px; text-align: left; vertical-align: middle; }
 th { color: var(--muted); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; }
 tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
-.row-actions { display: flex; gap: 8px; }
-.row-actions { flex-wrap: wrap; min-width: 360px; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; min-width: 150px; }
+
+.tools-actions {
+  justify-content: flex-start;
+}
 
 .history-filters {
   display: flex;
@@ -699,33 +673,6 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   color: var(--text);
 }
 
-.screen-mode .header-actions,
-.screen-mode .inventory-panel,
-.screen-mode .history-panel,
-.screen-mode .analytics-panel,
-.screen-mode .quick-products-panel,
-.screen-mode .alerts-panel .btn,
-.screen-mode .row-actions {
-  display: none !important;
-}
-
-.screen-mode .app-shell {
-  width: min(1500px, calc(100% - 40px));
-}
-
-.screen-mode .dashboard-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.screen-mode .critical-list,
-.screen-mode .use-first-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.screen-mode .metric-card strong {
-  font-size: clamp(2.4rem, 5vw, 4.6rem);
-}
-
 .check-row {
   display: inline-flex !important;
   grid-template-columns: auto 1fr;
@@ -843,7 +790,6 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   .dashboard-grid, .form-grid { grid-template-columns: 1fr; }
   .critical-list { grid-template-columns: 1fr; }
   .analytics-grid { grid-template-columns: 1fr; }
-  .quick-products-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .compact-critical-item { grid-template-columns: 1fr; }
   .use-first-item { display: grid; }
   .use-first-meta { justify-items: start; text-align: left; }
