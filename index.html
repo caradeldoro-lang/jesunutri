@@ -35,6 +35,104 @@
       </form>
     </section>
 
+    <section class="operator-shell" id="operatorShell" hidden>
+      <header class="operator-header">
+        <img class="operator-logo" src="logo.png" alt="Jesunutri">
+        <button class="btn small logout-btn" type="button" id="operatorLogoutBtn">Salir</button>
+      </header>
+
+      <main>
+        <section class="panel operator-panel">
+          <div class="section-heading">
+            <div>
+              <h2>Ingreso pendiente</h2>
+              <p>Registra productos para que Jesu revise y apruebe.</p>
+            </div>
+            <div class="receipt-display">Recepcion: <strong id="operatorReceiptDisplay"></strong></div>
+            <input id="operatorReceiptDate" type="date" hidden>
+          </div>
+
+          <div class="bulk-error-list" id="operatorBulkErrorList" hidden></div>
+
+          <details class="pos-summary" id="operatorProductsSummary">
+            <summary>
+              <span id="operatorProductsCount">Productos ingresados (0)</span>
+              <div class="pos-chip-list" id="operatorProductsChips"></div>
+            </summary>
+            <div class="pos-added-list" id="operatorProductsList"></div>
+          </details>
+
+          <form class="pos-form" id="operatorProductForm">
+            <div class="pos-product-row">
+              <label class="pos-field product-field">
+                <span>Producto</span>
+                <input name="nombre" type="text" list="productSuggestions" autocomplete="off" placeholder="Coca cola">
+              </label>
+              <label class="critical-toggle">
+                <input name="critico" type="checkbox">
+                <span>CRITICO</span>
+              </label>
+            </div>
+
+            <div class="pos-grid two">
+              <label class="pos-field">
+                <span>Cantidad</span>
+                <input name="cantidad" type="number" min="0.001" step="0.001" placeholder="12">
+              </label>
+              <fieldset class="unit-tiles">
+                <legend>Unidad</legend>
+                <label><input type="radio" name="unidad" value="kg" checked><span>KG</span></label>
+                <label><input type="radio" name="unidad" value="lt"><span>LT</span></label>
+                <label><input type="radio" name="unidad" value="unidad"><span>UN</span></label>
+                <select name="unidad_extra" aria-label="Mas unidades">
+                  <option value="">Mas</option>
+                  <option value="g">g</option>
+                  <option value="ml">ml</option>
+                  <option value="caja">caja</option>
+                  <option value="paquete">paquete</option>
+                </select>
+              </fieldset>
+            </div>
+
+            <div class="pos-grid two">
+              <fieldset class="expiry-box">
+                <legend>Vencimiento</legend>
+                <input name="vence_dd" inputmode="numeric" maxlength="2" placeholder="DD">
+                <input name="vence_mm" inputmode="numeric" maxlength="2" placeholder="MM">
+                <input name="vence_yyyy" inputmode="numeric" maxlength="4" placeholder="AAAA">
+              </fieldset>
+              <label class="pos-field">
+                <span>Lote</span>
+                <input name="lote" type="text" placeholder="ABC123">
+              </label>
+            </div>
+
+            <details class="optional-note">
+              <summary>Observacion opcional</summary>
+              <textarea name="observaciones" rows="2" placeholder="Opcional"></textarea>
+            </details>
+
+            <button class="btn primary pos-add-btn" type="submit" id="operatorAddProductBtn">Agregar producto</button>
+          </form>
+
+          <div class="form-actions">
+            <button class="btn" type="button" id="operatorCancelEntry">Cancelar</button>
+            <button class="btn primary" type="button" id="sendPendingBtn">Enviar a revision</button>
+          </div>
+        </section>
+
+        <section class="panel operator-panel">
+          <div class="section-heading compact-heading">
+            <div>
+              <h2>Mis ingresos enviados</h2>
+              <p>Estado de tus ingresos pendientes.</p>
+            </div>
+          </div>
+          <div class="pending-list" id="operatorPendingList"></div>
+        </section>
+      </main>
+    </section>
+
     <div class="app-shell" id="appShell" hidden>
       <header class="header-topbar app-header">
         <a class="logo-wrapper" href="./" aria-label="Jesunutri inicio">
@@ -77,6 +175,17 @@
             <strong id="lowStockItems">0</strong>
             <small>Bajo minimo configurado</small>
           </button>
+        </section>
+
+        <section class="panel pending-admin-panel">
+          <div class="section-heading compact-heading">
+            <div>
+              <h2>Ingresos pendientes</h2>
+              <p>Ingresos enviados por operadores para revision.</p>
+            </div>
+            <span class="pill" id="pendingCount">0 pendientes</span>
+          </div>
+          <div class="pending-list" id="adminPendingList"></div>
         </section>
 
         <section class="panel critical-panel">
@@ -355,41 +464,80 @@
           <div>
             <p class="eyebrow">Inventario</p>
             <h2 id="bulkModalTitle">Ingreso masivo</h2>
-            <p class="modal-copy">Puedes escribir directo o pegar filas desde Excel en la tabla.</p>
           </div>
           <div class="modal-tools">
-            <label class="compact-date">
-              <span>Recepcion</span>
-              <input id="bulkReceiptDate" type="date">
-            </label>
+            <div class="receipt-display">Recepcion: <strong id="bulkReceiptDisplay"></strong></div>
+            <input id="bulkReceiptDate" type="date" hidden>
             <button class="icon-btn" type="button" id="closeBulkModal" aria-label="Cerrar">x</button>
           </div>
         </div>
 
         <div class="bulk-error-list" id="bulkErrorList" hidden></div>
 
-        <div class="bulk-table-wrap">
-          <table class="bulk-table">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Cantidad</th>
-                <th>Unidad</th>
-                <th>Fecha vencimiento</th>
-                <th>Mes</th>
-                <th>Lote</th>
-                <th>Critico</th>
-                <th>Observaciones</th>
-              </tr>
-            </thead>
-            <tbody id="bulkTableBody"></tbody>
-          </table>
-        </div>
+        <details class="pos-summary" id="bulkProductsSummary">
+          <summary>
+            <span id="bulkProductsCount">Productos ingresados (0)</span>
+            <div class="pos-chip-list" id="bulkProductsChips"></div>
+          </summary>
+          <div class="pos-added-list" id="bulkProductsList"></div>
+        </details>
+
+        <form class="pos-form" id="bulkProductForm">
+          <div class="pos-product-row">
+            <label class="pos-field product-field">
+              <span>Producto</span>
+              <input name="nombre" type="text" list="productSuggestions" autocomplete="off" placeholder="Coca cola">
+            </label>
+            <label class="critical-toggle">
+              <input name="critico" type="checkbox">
+              <span>CRITICO</span>
+            </label>
+          </div>
+
+          <div class="pos-grid two">
+            <label class="pos-field">
+              <span>Cantidad</span>
+              <input name="cantidad" type="number" min="0.001" step="0.001" placeholder="12">
+            </label>
+            <fieldset class="unit-tiles">
+              <legend>Unidad</legend>
+              <label><input type="radio" name="unidad" value="kg" checked><span>KG</span></label>
+              <label><input type="radio" name="unidad" value="lt"><span>LT</span></label>
+              <label><input type="radio" name="unidad" value="unidad"><span>UN</span></label>
+              <select name="unidad_extra" aria-label="Mas unidades">
+                <option value="">Mas</option>
+                <option value="g">g</option>
+                <option value="ml">ml</option>
+                <option value="caja">caja</option>
+                <option value="paquete">paquete</option>
+              </select>
+            </fieldset>
+          </div>
+
+          <div class="pos-grid two">
+            <fieldset class="expiry-box">
+              <legend>Vencimiento</legend>
+              <input name="vence_dd" inputmode="numeric" maxlength="2" placeholder="DD">
+              <input name="vence_mm" inputmode="numeric" maxlength="2" placeholder="MM">
+              <input name="vence_yyyy" inputmode="numeric" maxlength="4" placeholder="AAAA">
+            </fieldset>
+            <label class="pos-field">
+              <span>Lote</span>
+              <input name="lote" type="text" placeholder="ABC123">
+            </label>
+          </div>
+
+          <details class="optional-note">
+            <summary>Observacion opcional</summary>
+            <textarea name="observaciones" rows="2" placeholder="Opcional"></textarea>
+          </details>
+
+          <button class="btn primary pos-add-btn" type="submit" id="bulkAddProductBtn">Agregar producto</button>
+        </form>
 
         <div class="form-actions">
-          <button class="btn" type="button" id="addBulkRow">Agregar fila</button>
           <button class="btn" type="button" id="cancelBulk">Cancelar</button>
-          <button class="btn primary" type="button" id="saveBulkBtn">Guardar filas validas</button>
+          <button class="btn primary" type="button" id="saveBulkBtn">Guardar ingreso</button>
         </div>
       </section>
     </div>
@@ -588,6 +736,52 @@
         <div class="form-actions">
           <button class="btn" type="button" id="cancelLabels">Cancelar</button>
           <button class="btn primary" type="button" id="printLabelsBtn">Generar etiquetas</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="pendingReviewModal" hidden>
+      <section class="modal pending-review-modal" role="dialog" aria-modal="true" aria-labelledby="pendingReviewTitle">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Revision</p>
+            <h2 id="pendingReviewTitle">Ingreso pendiente</h2>
+            <p class="modal-copy" id="pendingReviewMeta"></p>
+          </div>
+          <button class="icon-btn" type="button" id="closePendingReviewModal" aria-label="Cerrar">x</button>
+        </div>
+
+        <div class="bulk-error-list" id="pendingReviewErrorList" hidden></div>
+
+        <label class="operator-observation reject-reason-field">
+          <span>Motivo rechazo</span>
+          <textarea id="pendingRejectReason" rows="2" placeholder="Obligatorio si se rechaza"></textarea>
+        </label>
+
+        <div class="bulk-table-wrap">
+          <table class="bulk-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Unidad</th>
+                <th>Fecha vencimiento</th>
+                <th>Mes</th>
+                <th>Lote</th>
+                <th>Critico</th>
+                <th>Observaciones</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="pendingReviewTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn" type="button" id="addPendingReviewRow">Agregar fila</button>
+          <button class="btn danger-btn" type="button" id="rejectPendingBtn">Rechazar</button>
+          <button class="btn" type="button" id="cancelPendingReview">Cancelar</button>
+          <button class="btn primary" type="button" id="approvePendingBtn">Aprobar ingreso</button>
         </div>
       </section>
     </div>
