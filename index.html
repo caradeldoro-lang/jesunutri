@@ -12,10 +12,15 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Jesunutri">
     <link rel="apple-touch-icon" href="icon-192.png">
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=6">
   </head>
   <body>
-    <section class="login-screen" id="loginScreen">
+    <section class="app-splash" id="appSplash">
+      <img src="logo.png" alt="Jesunutri">
+      <span>Cargando...</span>
+    </section>
+
+    <section class="login-screen" id="loginScreen" hidden>
       <form class="login-card" id="loginForm">
         <img src="logo.png" alt="Jesunutri" class="login-logo">
         <div>
@@ -53,7 +58,7 @@
               <h2>Ingreso pendiente</h2>
               <p>Registra productos para que Jesu revise y apruebe.</p>
             </div>
-            <div class="receipt-display">Recepcion: <strong id="operatorReceiptDisplay"></strong></div>
+            <div class="receipt-display pos-receipt">Recepcion: <strong id="operatorReceiptDisplay"></strong></div>
             <input id="operatorReceiptDate" type="date" hidden>
           </div>
 
@@ -472,7 +477,7 @@
             <h2 id="bulkModalTitle">Ingreso masivo</h2>
           </div>
           <div class="modal-tools">
-            <div class="receipt-display">Recepcion: <strong id="bulkReceiptDisplay"></strong></div>
+            <div class="receipt-display pos-receipt">Recepcion: <strong id="bulkReceiptDisplay"></strong></div>
             <input id="bulkReceiptDate" type="date" hidden>
           </div>
         </div>
@@ -890,7 +895,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=5"></script>
+    <script src="script.js?v=6"></script>
   </body>
 </html>
 

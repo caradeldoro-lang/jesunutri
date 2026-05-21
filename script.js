@@ -3,7 +3,14 @@
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indzbm5oY3pkaGl5c2doc3RwbGtpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDU3ODYsImV4cCI6MjA5NDg4MTc4Nn0.wDawAny58YsXgNgPaV6oKzQD4QdFdLYO8vomVFVKGAQ";
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: window.localStorage
+  }
+});
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BULK_COLUMNS = ["nombre", "cantidad", "unidad", "fecha_vencimiento", "lote", "critico", "observaciones"];
@@ -95,6 +102,7 @@ const state = {
 };
 
 const elements = {
+  appSplash: document.getElementById("appSplash"),
   loginScreen: document.getElementById("loginScreen"),
   loginForm: document.getElementById("loginForm"),
   loginError: document.getElementById("loginError"),
@@ -346,7 +354,12 @@ function clearLoginError() {
   elements.loginError.hidden = true;
 }
 
+function hideSplash() {
+  elements.appSplash.hidden = true;
+}
+
 function showLogin() {
+  hideSplash();
   state.currentUser = null;
   elements.appShell.hidden = true;
   elements.operatorShell.hidden = true;
@@ -355,17 +368,27 @@ function showLogin() {
 }
 
 function showAdminApp() {
+  hideSplash();
   elements.loginScreen.hidden = true;
   elements.operatorShell.hidden = true;
   elements.appShell.hidden = false;
 }
 
 function showOperatorApp() {
+  hideSplash();
   elements.loginScreen.hidden = true;
   elements.appShell.hidden = true;
   elements.operatorShell.hidden = false;
   const displayName = state.currentUser?.nombre || state.currentUser?.email || "Operador";
   elements.operatorWelcome.innerHTML = `<strong>Bienvenido: ${escapeHtml(displayName)}</strong><span>Rol: Operador</span>`;
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
 }
 
 function isAdmin() {
@@ -399,34 +422,47 @@ async function loadAuthorizedUser(authUser) {
 }
 
 async function startAuthenticatedApp(session) {
-  await loadAuthorizedUser(session.user);
+  await withTimeout(loadAuthorizedUser(session.user), 12000, "No se pudo validar el usuario. Revisa internet o permisos RLS.");
   if (isAdmin()) {
     showAdminApp();
-    await refreshInventory();
-    await loadAdminPendingEntries();
-    renderAdminPendingEntries();
+    try {
+      await withTimeout(refreshInventory(), 18000, "No se pudo cargar inventario a tiempo.");
+      await withTimeout(loadAdminPendingEntries(), 12000, "No se pudieron cargar ingresos pendientes.");
+      renderAdminPendingEntries();
+    } catch (error) {
+      showError("Sesion iniciada, pero hubo un problema cargando datos", error);
+    }
     return;
   }
 
   showOperatorApp();
-  await loadProductsFromSupabase();
   setupOperatorEntryTable();
-  await loadOperatorPendingEntries();
+  try {
+    await withTimeout(loadProductsFromSupabase(), 12000, "No se pudo cargar catalogo de productos.");
+    await withTimeout(loadOperatorPendingEntries(), 12000, "No se pudieron cargar tus ingresos enviados.");
+  } catch (error) {
+    elements.operatorBulkErrorList.hidden = false;
+    elements.operatorBulkErrorList.innerHTML = `<div>${escapeHtml(getSupabaseErrorMessage(error))}</div>`;
+    showToastError("Sesion iniciada, pero falta cargar datos.");
+  }
 }
 
 async function checkInitialSession() {
   clearLoginError();
-  const { data, error } = await supabaseClient.auth.getSession();
-  if (error || !data.session) {
-    showLogin();
-    return;
-  }
-
   try {
+    const { data, error } = await withTimeout(
+      supabaseClient.auth.getSession(),
+      10000,
+      "Tu sesion expiro."
+    );
+    if (error || !data.session) {
+      showLogin();
+      return;
+    }
     await startAuthenticatedApp(data.session);
   } catch (authError) {
     showLogin();
-    showLoginError(authError.message || "No se pudo validar el acceso.");
+    showLoginError(authError.message || "Tu sesion expiro.");
   }
 }
 
@@ -1161,7 +1197,7 @@ function renderPosSession(kind) {
   ctx.chips.innerHTML = rows.slice(0, 4).map((row) => `<span>${escapeHtml(row.nombre)} ${formatNumber(row.cantidad)} ${escapeHtml(row.unidad)}</span>`).join("");
   ctx.list.innerHTML = rows.length
     ? rows.map((row, index) => `
-      <article class="pos-added-item">
+      <article class="pos-added-item" data-pos-item="${kind}" data-index="${index}">
         <div>
           <strong>${escapeHtml(row.nombre)}</strong>
           <span>${formatNumber(row.cantidad)} ${escapeHtml(row.unidad)} - vence ${formatDisplayDate(row.fechaVencimiento)}</span>
@@ -2588,6 +2624,12 @@ document.addEventListener("click", (event) => {
   const posDeleteButton = event.target.closest("[data-pos-delete]");
   if (posDeleteButton) {
     deletePosRow(posDeleteButton.dataset.posDelete, Number(posDeleteButton.dataset.index));
+    return;
+  }
+
+  const posItem = event.target.closest("[data-pos-item]");
+  if (posItem && !event.target.closest("button")) {
+    editPosRow(posItem.dataset.posItem, Number(posItem.dataset.index));
     return;
   }
 
