@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
   <head>
     <meta charset="utf-8">
@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Jesunutri">
     <link rel="apple-touch-icon" href="icon-192.png">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=5">
   </head>
   <body>
     <section class="login-screen" id="loginScreen">
@@ -24,7 +24,7 @@
         </div>
         <label>
           <span>Email</span>
-          <input name="email" type="email" autocomplete="email" required placeholder="jesu@admin.cl">
+          <input name="email" type="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" required placeholder="jesu@admin.cl">
         </label>
         <label>
           <span>Password</span>
@@ -38,10 +38,15 @@
     <section class="operator-shell" id="operatorShell" hidden>
       <header class="operator-header">
         <img class="operator-logo" src="logo.png" alt="Jesunutri">
-        <button class="btn small logout-btn" type="button" id="operatorLogoutBtn">Salir</button>
+        <div class="operator-top-actions">
+          <div class="operator-welcome" id="operatorWelcome">Bienvenido</div>
+          <button class="btn small logout-btn" type="button" id="operatorLogoutBtn">Salir</button>
+        </div>
       </header>
 
       <main>
+        <div class="internal-notice operator-notice" id="operatorNotice" hidden></div>
+
         <section class="panel operator-panel">
           <div class="section-heading">
             <div>
@@ -185,6 +190,7 @@
             </div>
             <span class="pill" id="pendingCount">0 pendientes</span>
           </div>
+          <div class="internal-notice admin-notice" id="adminPendingNotice" hidden></div>
           <div class="pending-list" id="adminPendingList"></div>
         </section>
 
@@ -884,7 +890,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js"></script>
+    <script src="script.js?v=5"></script>
   </body>
 </html>
 

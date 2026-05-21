@@ -1,4 +1,4 @@
-const CACHE_NAME = "jesunutri-pwa-v4";
+const CACHE_NAME = "jesunutri-pwa-v5";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
@@ -58,6 +58,10 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (requestUrl.origin === self.location.origin) {
+    if (requestUrl.pathname.endsWith(".js") || requestUrl.pathname.endsWith(".css")) {
+      event.respondWith(networkFirst(event.request));
+      return;
+    }
     event.respondWith(cacheFirst(event.request));
   }
 });

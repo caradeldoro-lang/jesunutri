@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   color-scheme: dark;
   --bg: #090d14;
   --panel: #111827;
@@ -113,6 +113,26 @@ button, input, select, textarea { font: inherit; }
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 18px;
+}
+
+.operator-top-actions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.operator-welcome {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.operator-welcome span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .operator-logo {
@@ -791,6 +811,29 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   justify-content: flex-start;
 }
 
+.internal-notice {
+  border: 1px solid rgba(79, 140, 255, 0.24);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: rgba(79, 140, 255, 0.12);
+  color: #cfe0ff;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.internal-notice.aprobado {
+  border-color: rgba(35, 196, 131, 0.32);
+  background: rgba(35, 196, 131, 0.13);
+  color: #9af2ce;
+}
+
+.internal-notice.rechazado {
+  border-color: rgba(239, 83, 80, 0.36);
+  background: rgba(239, 83, 80, 0.14);
+  color: #ffc4c2;
+}
+
 .pending-list {
   display: grid;
   gap: 10px;
@@ -843,6 +886,77 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
 .pending-status.rechazado {
   background: rgba(239, 83, 80, 0.18);
   color: #ffc4c2;
+}
+
+.operator-pending-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(21, 31, 47, 0.58);
+  overflow: hidden;
+}
+
+.operator-pending-card.pendiente {
+  border-color: rgba(242, 201, 76, 0.26);
+}
+
+.operator-pending-card.aprobado {
+  border-color: rgba(35, 196, 131, 0.26);
+}
+
+.operator-pending-card.rechazado {
+  border-color: rgba(239, 83, 80, 0.28);
+}
+
+.operator-pending-card summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.operator-pending-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.operator-pending-card strong,
+.operator-pending-card span,
+.operator-pending-card em {
+  display: block;
+}
+
+.operator-pending-card span,
+.operator-pending-card em {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.operator-pending-card em {
+  color: #ffc4c2;
+  font-style: normal;
+}
+
+.operator-pending-detail {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding: 10px 12px 12px;
+  background: rgba(11, 18, 32, 0.42);
+}
+
+.operator-pending-detail article {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: rgba(11, 18, 32, 0.58);
+}
+
+.view-detail-chip {
+  pointer-events: none;
+  width: auto;
 }
 
 .pending-review-modal {
@@ -1205,6 +1319,219 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   .unit-tiles { flex-wrap: wrap; }
 }
 
+@media (max-width: 640px) {
+  body {
+    background-size: auto;
+  }
+
+  .login-screen {
+    align-items: start;
+    padding: 14px;
+  }
+
+  .login-card {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .login-logo {
+    width: min(230px, 68vw);
+  }
+
+  .operator-shell {
+    width: min(100% - 16px, 1120px);
+    padding: 10px 0 28px;
+  }
+
+  .operator-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .operator-logo {
+    width: min(210px, 54vw);
+  }
+
+  .operator-top-actions {
+    gap: 6px;
+  }
+
+  .operator-welcome {
+    max-width: 150px;
+    font-size: 0.78rem;
+    line-height: 1.15;
+  }
+
+  .operator-welcome span {
+    font-size: 0.68rem;
+  }
+
+  .operator-panel {
+    padding: 10px;
+  }
+
+  .operator-panel .section-heading {
+    gap: 8px;
+  }
+
+  .operator-panel h2 {
+    font-size: 1rem;
+  }
+
+  .operator-panel p {
+    font-size: 0.82rem;
+  }
+
+  .receipt-display {
+    min-height: 32px;
+    padding: 0 9px;
+    font-size: 0.78rem;
+  }
+
+  .pos-summary {
+    margin-bottom: 10px;
+  }
+
+  .pos-summary summary {
+    min-height: 42px;
+    padding: 8px 10px;
+    gap: 8px;
+    font-size: 0.86rem;
+  }
+
+  .pos-chip-list span {
+    max-width: 128px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 4px 7px;
+    font-size: 0.7rem;
+  }
+
+  .pos-form {
+    gap: 9px;
+  }
+
+  .pos-product-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px;
+  }
+
+  .product-field input {
+    min-height: 48px;
+    font-size: 0.96rem;
+  }
+
+  .critical-toggle {
+    min-height: 48px;
+    padding-inline: 8px;
+    gap: 6px;
+    font-size: 0.72rem;
+  }
+
+  .critical-toggle input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .qty-unit-row {
+    grid-template-columns: minmax(72px, 92px) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .date-lot-row {
+    grid-template-columns: minmax(146px, 0.9fr) minmax(92px, 1fr);
+    gap: 8px;
+  }
+
+  .pos-field {
+    gap: 5px;
+    font-size: 0.74rem;
+  }
+
+  .pos-field input,
+  .expiry-box input,
+  .unit-tiles select,
+  .optional-note textarea {
+    min-height: 46px;
+    border-radius: 7px;
+    padding: 0 8px;
+    font-size: 0.9rem;
+  }
+
+  .unit-tiles {
+    gap: 5px;
+  }
+
+  .unit-tiles legend,
+  .expiry-box legend {
+    margin-bottom: 5px;
+    font-size: 0.74rem;
+  }
+
+  .unit-tiles label {
+    min-height: 46px;
+    border-radius: 7px;
+    font-size: 0.84rem;
+  }
+
+  .unit-tiles select {
+    flex: 1 0 58px;
+    font-size: 0.78rem;
+  }
+
+  .expiry-box {
+    gap: 5px;
+  }
+
+  .optional-note {
+    padding: 8px 10px;
+  }
+
+  .optional-note summary {
+    font-size: 0.78rem;
+  }
+
+  .optional-note textarea {
+    min-height: 54px;
+    margin-top: 8px;
+    padding: 8px;
+  }
+
+  .pos-add-btn {
+    min-height: 52px;
+    font-size: 0.9rem;
+  }
+
+  .operator-panel .form-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .operator-panel .form-actions .btn {
+    min-height: 50px;
+    padding-inline: 10px;
+  }
+
+  .operator-pending-card summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px;
+  }
+
+  .operator-pending-card .view-detail-chip {
+    grid-column: 1 / -1;
+    justify-self: start;
+    min-height: 28px;
+  }
+
+  .operator-pending-detail {
+    padding: 8px 10px 10px;
+  }
+}
+
 @media (max-width: 620px) {
   .app-shell { width: min(100% - 20px, 1180px); padding-top: 14px; }
   .header-topbar.app-header { display: grid; justify-items: center; gap: 12px; padding-top: 10px; padding-bottom: 12px; }
@@ -1237,7 +1564,11 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   .label-row { grid-template-columns: auto 1fr; }
   .label-row .month-badge { grid-column: 2; }
   .pending-item { grid-template-columns: 1fr; }
-  .operator-header { display: grid; justify-items: center; }
+  .operator-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    justify-items: stretch;
+  }
   .pos-added-item { display: grid; }
   .form-actions { display: grid; }
   .modal-header, .modal-tools { display: grid; }

@@ -1,4 +1,4 @@
-const SUPABASE_URL = "https://wsnnhczdhiysghstplki.supabase.co";
+﻿const SUPABASE_URL = "https://wsnnhczdhiysghstplki.supabase.co";
 
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indzbm5oY3pkaGl5c2doc3RwbGtpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDU3ODYsImV4cCI6MjA5NDg4MTc4Nn0.wDawAny58YsXgNgPaV6oKzQD4QdFdLYO8vomVFVKGAQ";
@@ -102,6 +102,8 @@ const elements = {
   appShell: document.getElementById("appShell"),
   operatorShell: document.getElementById("operatorShell"),
   operatorBulkErrorList: document.getElementById("operatorBulkErrorList"),
+  operatorWelcome: document.getElementById("operatorWelcome"),
+  operatorNotice: document.getElementById("operatorNotice"),
   operatorReceiptDate: document.getElementById("operatorReceiptDate"),
   operatorReceiptDisplay: document.getElementById("operatorReceiptDisplay"),
   operatorProductForm: document.getElementById("operatorProductForm"),
@@ -113,6 +115,7 @@ const elements = {
   sendPendingBtn: document.getElementById("sendPendingBtn"),
   adminPendingList: document.getElementById("adminPendingList"),
   pendingCount: document.getElementById("pendingCount"),
+  adminPendingNotice: document.getElementById("adminPendingNotice"),
   totalItems: document.getElementById("totalItems"),
   soonItems: document.getElementById("soonItems"),
   expiredItems: document.getElementById("expiredItems"),
@@ -230,6 +233,13 @@ function formatDisplayDate(isoDate) {
   if (!isoDate) return "Sin fecha";
   const [year, month, day] = isoDate.split("-");
   return `${day}-${month}-${year}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return formatDisplayDate(value);
+  return date.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 function formatDays(days) {
@@ -354,6 +364,8 @@ function showOperatorApp() {
   elements.loginScreen.hidden = true;
   elements.appShell.hidden = true;
   elements.operatorShell.hidden = false;
+  const displayName = state.currentUser?.nombre || state.currentUser?.email || "Operador";
+  elements.operatorWelcome.innerHTML = `<strong>Bienvenido: ${escapeHtml(displayName)}</strong><span>Rol: Operador</span>`;
 }
 
 function isAdmin() {
@@ -2309,20 +2321,48 @@ async function loadAdminPendingEntries() {
 
 function renderOperatorPendingEntries() {
   if (!state.pendingEntries.length) {
+    elements.operatorNotice.hidden = true;
+    elements.operatorNotice.textContent = "";
     elements.operatorPendingList.innerHTML = '<div class="empty compact-empty">Aun no hay ingresos enviados.</div>';
     return;
   }
 
+  const changedEntries = state.pendingEntries.filter((entry) => entry.estado === "aprobado" || entry.estado === "rechazado");
+  if (changedEntries.length) {
+    const last = changedEntries[0];
+    const label = last.estado === "aprobado" ? "aprobado" : "rechazado";
+    elements.operatorNotice.textContent = `Tu ingreso del ${formatDateTime(last.created_at)} fue ${label}.`;
+    elements.operatorNotice.className = `internal-notice operator-notice ${last.estado}`;
+    elements.operatorNotice.hidden = false;
+  } else {
+    elements.operatorNotice.hidden = true;
+    elements.operatorNotice.textContent = "";
+  }
+
   elements.operatorPendingList.innerHTML = state.pendingEntries
     .map((entry) => `
-      <article class="pending-item">
-        <div>
-          <strong>${formatDisplayDate(entry.fecha_recepcion)}</strong>
-          <span>${entry.detalles.length} filas enviadas</span>
-          ${entry.motivo_rechazo ? `<span>${escapeHtml(entry.motivo_rechazo)}</span>` : ""}
+      <details class="operator-pending-card ${entry.estado}">
+        <summary>
+          <div>
+            <strong>Enviado: ${formatDateTime(entry.created_at)}</strong>
+            <span>Recepcion: ${formatDisplayDate(entry.fecha_recepcion)} - ${entry.detalles.length} productos</span>
+            ${entry.aprobado_por_email ? `<span>Aprobado por: ${escapeHtml(entry.aprobado_por_email)}</span>` : ""}
+            ${entry.rechazado_por_email ? `<span>Rechazado por: ${escapeHtml(entry.rechazado_por_email)}</span>` : ""}
+            ${entry.motivo_rechazo ? `<em>${escapeHtml(entry.motivo_rechazo)}</em>` : ""}
+          </div>
+          <span class="pending-status ${entry.estado}">${escapeHtml(entry.estado)}</span>
+          <span class="btn small view-detail-chip">Ver detalle</span>
+        </summary>
+        <div class="operator-pending-detail">
+          ${entry.detalles.map((detail) => `
+            <article>
+              <strong>${escapeHtml(detail.nombre)}</strong>
+              <span>${formatNumber(detail.cantidad)} ${escapeHtml(detail.unidad)} - vence ${formatDisplayDate(detail.fecha_vencimiento)}</span>
+              <span>Lote: ${escapeHtml(detail.lote || "-")} ${detail.critico ? "- Critico" : ""}</span>
+            </article>
+          `).join("")}
         </div>
-        <span class="pending-status ${entry.estado}">${escapeHtml(entry.estado)}</span>
-      </article>
+      </details>
     `)
     .join("");
 }
@@ -2330,6 +2370,13 @@ function renderOperatorPendingEntries() {
 function renderAdminPendingEntries() {
   const pending = state.pendingEntries.filter((entry) => entry.estado === "pendiente");
   elements.pendingCount.textContent = `${pending.length} pendientes`;
+  if (pending.length) {
+    elements.adminPendingNotice.textContent = `Tienes ${pending.length} ingresos pendientes por revisar.`;
+    elements.adminPendingNotice.hidden = false;
+  } else {
+    elements.adminPendingNotice.hidden = true;
+    elements.adminPendingNotice.textContent = "";
+  }
   if (!state.pendingEntries.length) {
     elements.adminPendingList.innerHTML = '<div class="empty compact-empty">No hay ingresos pendientes.</div>';
     return;
@@ -2717,10 +2764,13 @@ elements.loginForm.addEventListener("submit", async (event) => {
   try {
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    if (!data?.session) throw new Error("Supabase no devolvio una sesion activa.");
     await startAuthenticatedApp(data.session);
     elements.loginForm.reset();
   } catch (error) {
-    showLoginError(error.message === "Usuario sin acceso autorizado." ? error.message : "Email o password incorrecto.");
+    const message = getSupabaseErrorMessage(error);
+    const isCredentialError = /invalid login credentials|email not confirmed|invalid credentials/i.test(message);
+    showLoginError(isCredentialError ? "Email o password incorrecto." : `No se pudo ingresar: ${message}`);
   } finally {
     elements.loginBtn.disabled = false;
     elements.loginBtn.textContent = "Ingresar";
