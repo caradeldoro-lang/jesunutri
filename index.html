@@ -23,6 +23,7 @@
         <div class="actions header-actions">
           <button class="btn primary" type="button" id="bulkEntryBtn">Ingreso masivo</button>
           <button class="btn use-stock-btn" type="button" id="useStockBtn">Stock consumido</button>
+          <button class="btn" type="button" id="labelsBtn">Etiquetas</button>
           <button class="btn" type="button" id="adjustStockBtn">Ajuste inventario</button>
         </div>
       </header>
@@ -76,16 +77,6 @@
             </div>
           </div>
           <div class="compact-critical-list" id="compactCriticalList"></div>
-        </section>
-
-        <section class="panel use-first-panel">
-          <div class="section-heading compact-heading">
-            <div>
-              <h2>Usar primero</h2>
-              <p>Lotes vencidos, de hoy o proximos a vencer ordenados por fecha.</p>
-            </div>
-          </div>
-          <div class="use-first-list" id="useFirstList"></div>
         </section>
 
         <section class="panel alerts-panel">
@@ -191,10 +182,13 @@
           <div class="actions tools-actions">
             <button class="btn" type="button" id="exportBtn">Exportar</button>
             <button class="btn" type="button" id="backupBtn">Backup CSV</button>
-            <button class="btn" type="button" id="labelsBtn">Etiquetas</button>
           </div>
         </section>
       </main>
+
+      <footer class="app-footer">
+        Con cariño para mi Jesu. Atte. Sebastian Urrea.
+      </footer>
     </div>
 
     <datalist id="productSuggestions"></datalist>
