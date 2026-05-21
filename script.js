@@ -6,21 +6,21 @@ const SUPABASE_ANON_KEY =
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const BULK_COLUMNS = ["nombre", "cantidad", "unidad", "fecha_vencimiento", "lote", "observaciones"];
+const BULK_COLUMNS = ["nombre", "cantidad", "unidad", "fecha_vencimiento", "lote", "critico", "observaciones"];
 const UNIT_OPTIONS = ["kg", "g", "lt", "ml", "unidad", "caja", "paquete"];
 const MONTHS = [
-  { label: "Enero", className: "month-1" },
-  { label: "Febrero", className: "month-2" },
-  { label: "Marzo", className: "month-3" },
-  { label: "Abril", className: "month-4" },
-  { label: "Mayo", className: "month-5" },
-  { label: "Junio", className: "month-6" },
-  { label: "Julio", className: "month-7" },
-  { label: "Agosto", className: "month-8" },
-  { label: "Septiembre", className: "month-9" },
-  { label: "Octubre", className: "month-10" },
-  { label: "Noviembre", className: "month-11" },
-  { label: "Diciembre", className: "month-12" }
+  { label: "Enero", className: "month-1", color: "#0066FF" },
+  { label: "Febrero", className: "month-2", color: "#00D9FF" },
+  { label: "Marzo", className: "month-3", color: "#00FF66" },
+  { label: "Abril", className: "month-4", color: "#99FF00" },
+  { label: "Mayo", className: "month-5", color: "#FFD500" },
+  { label: "Junio", className: "month-6", color: "#FF7A00" },
+  { label: "Julio", className: "month-7", color: "#FF0000" },
+  { label: "Agosto", className: "month-8", color: "#FF00AA" },
+  { label: "Septiembre", className: "month-9", color: "#7A00FF" },
+  { label: "Octubre", className: "month-10", color: "#B000FF" },
+  { label: "Noviembre", className: "month-11", color: "#6B3E00" },
+  { label: "Diciembre", className: "month-12", color: "#BFC7D5" }
 ];
 
 const formatIsoDate = (date) => date.toISOString().slice(0, 10);
@@ -44,6 +44,7 @@ const mockInventory = [
     lote: "HF-2405",
     observaciones: "Ingreso reciente",
     stockMinimo: 20,
+    critico: true,
     revisada: false
   },
   {
@@ -57,6 +58,7 @@ const mockInventory = [
     lote: "AZ-118",
     observaciones: "Revisar retiro por vencimiento",
     stockMinimo: 12,
+    critico: false,
     revisada: false
   },
   {
@@ -70,6 +72,7 @@ const mockInventory = [
     lote: "LE-091",
     observaciones: "Prioridad de consumo",
     stockMinimo: 10,
+    critico: true,
     revisada: false
   }
 ];
@@ -78,7 +81,9 @@ const state = {
   query: "",
   inventory: [],
   products: [],
+  movements: [],
   lowStockProducts: [],
+  deferredInstallPrompt: null,
   usingFallback: false
 };
 
@@ -87,9 +92,20 @@ const elements = {
   soonItems: document.getElementById("soonItems"),
   expiredItems: document.getElementById("expiredItems"),
   lowStockItems: document.getElementById("lowStockItems"),
+  criticalProductsList: document.getElementById("criticalProductsList"),
+  quickProductsList: document.getElementById("quickProductsList"),
+  compactCriticalPanel: document.getElementById("compactCriticalPanel"),
+  compactCriticalList: document.getElementById("compactCriticalList"),
+  analyticsGrid: document.getElementById("analyticsGrid"),
+  useFirstList: document.getElementById("useFirstList"),
   alertCount: document.getElementById("alertCount"),
   alertsList: document.getElementById("alertsList"),
   inventoryTable: document.getElementById("inventoryTable"),
+  historyTableBody: document.getElementById("historyTableBody"),
+  historyProductFilter: document.getElementById("historyProductFilter"),
+  historyTypeFilter: document.getElementById("historyTypeFilter"),
+  historyFromFilter: document.getElementById("historyFromFilter"),
+  historyToFilter: document.getElementById("historyToFilter"),
   searchInput: document.getElementById("searchInput"),
   toast: document.getElementById("toast"),
   errorBox: document.getElementById("errorBox"),
@@ -115,6 +131,23 @@ const elements = {
   fifoDeviationWarning: document.getElementById("fifoDeviationWarning"),
   fifoSummaryList: document.getElementById("fifoSummaryList"),
   confirmUseBtn: document.getElementById("confirmUseBtn"),
+  adjustModal: document.getElementById("adjustModal"),
+  adjustForm: document.getElementById("adjustForm"),
+  adjustLotSelect: document.getElementById("adjustLotSelect"),
+  adjustSystemStock: document.getElementById("adjustSystemStock"),
+  saveAdjustBtn: document.getElementById("saveAdjustBtn"),
+  exportModal: document.getElementById("exportModal"),
+  exportType: document.getElementById("exportType"),
+  labelsModal: document.getElementById("labelsModal"),
+  labelsList: document.getElementById("labelsList"),
+  printLabelsBtn: document.getElementById("printLabelsBtn"),
+  productSettingsModal: document.getElementById("productSettingsModal"),
+  productSettingsForm: document.getElementById("productSettingsForm"),
+  productSettingsName: document.getElementById("productSettingsName"),
+  pauseProductBtn: document.getElementById("pauseProductBtn"),
+  saveProductSettingsBtn: document.getElementById("saveProductSettingsBtn"),
+  installAppBtn: document.getElementById("installAppBtn"),
+  installHint: document.getElementById("installHint"),
   detailModal: document.getElementById("detailModal"),
   detailModalTitle: document.getElementById("detailModalTitle"),
   detailTableBody: document.getElementById("detailTableBody"),
@@ -168,6 +201,22 @@ function formatDays(days) {
   if (days < 0) return `${Math.abs(days)} vencido`;
   if (days === 0) return "Hoy";
   return `${days} dias`;
+}
+
+function formatNumber(value) {
+  const number = Number(value || 0);
+  return Number.isInteger(number) ? String(number) : number.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function isStandaloneMode() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function updateInstallUi() {
+  const installed = isStandaloneMode();
+  document.body.classList.toggle("app-installed", installed);
+  elements.installHint.hidden = installed;
+  if (installed || !state.deferredInstallPrompt) elements.installAppBtn.hidden = true;
 }
 
 function getMonthInfo(isoDate) {
@@ -296,6 +345,7 @@ function handleSystemModalKeydown(event) {
 }
 
 function mapSupabaseLot(row) {
+  const product = state.products.find((item) => String(item.id) === String(row.producto_id));
   return {
     id: row.lote_id,
     productoId: row.producto_id,
@@ -306,23 +356,39 @@ function mapSupabaseLot(row) {
     fechaRecepcion: row.fecha_recepcion,
     lote: row.lote,
     observaciones: row.observaciones,
-    stockMinimo: Number(row.stock_minimo ?? 0),
+    stockMinimo: Number(row.stock_minimo ?? product?.stock_minimo ?? 0),
+    critico: Boolean(row.critico ?? product?.critico),
+    consumoPromedioDiario: Number(row.consumo_promedio_diario ?? product?.consumo_promedio_diario ?? 0),
+    favorito: Boolean(row.favorito ?? product?.favorito),
     revisada: Boolean(row.alerta_vencimiento_revisada),
     activo: row.activo !== false
   };
 }
 
 async function loadProductsFromSupabase() {
-  const { data, error } = await supabaseClient
+  let { data, error } = await supabaseClient
     .from("productos_insumos")
-    .select("id,nombre,nombre_normalizado,unidad_default,stock_minimo,activo")
+    .select("id,nombre,nombre_normalizado,unidad_default,stock_minimo,critico,consumo_promedio_diario,favorito,activo")
     .eq("activo", true)
     .is("deleted_at", null)
     .order("nombre", { ascending: true });
 
+  if (error && /consumo_promedio_diario|favorito/i.test(getSupabaseErrorMessage(error))) {
+    const fallback = await supabaseClient
+      .from("productos_insumos")
+      .select("id,nombre,nombre_normalizado,unidad_default,stock_minimo,critico,activo")
+      .eq("activo", true)
+      .is("deleted_at", null)
+      .order("nombre", { ascending: true });
+    data = fallback.data;
+    error = fallback.error;
+  }
+
   if (error) throw error;
   state.products = (data || []).map((product) => ({
     ...product,
+    consumo_promedio_diario: Number(product.consumo_promedio_diario || 0),
+    favorito: Boolean(product.favorito),
     nombre_normalizado: product.nombre_normalizado || normalize(product.nombre)
   }));
   renderProductSuggestions();
@@ -353,6 +419,58 @@ async function loadInventoryFromSupabase() {
   clearError();
 }
 
+async function loadMovementHistory() {
+  if (state.usingFallback) {
+    state.movements = [];
+    return;
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("movimientos_inventario")
+      .select(`
+        id,
+        producto_id,
+        lote_id,
+        tipo_movimiento,
+        cantidad,
+        unidad,
+        fecha_movimiento,
+        motivo,
+        observacion,
+        desviacion_fifo,
+        lote_recomendado_id,
+        created_at,
+        productos_insumos(nombre),
+        insumo_lotes(lote,fecha_vencimiento)
+      `)
+      .order("fecha_movimiento", { ascending: false })
+      .limit(300);
+
+    if (error) throw error;
+
+    state.movements = (data || []).map((row) => ({
+      id: row.id,
+      productoId: row.producto_id,
+      loteId: row.lote_id,
+      tipo: row.tipo_movimiento,
+      cantidad: Number(row.cantidad || 0),
+      unidad: row.unidad || "-",
+      fecha: row.fecha_movimiento || row.created_at,
+      motivo: row.motivo || "",
+      observacion: row.observacion || "",
+      desviacionFifo: Boolean(row.desviacion_fifo),
+      loteRecomendadoId: row.lote_recomendado_id,
+      producto: row.productos_insumos?.nombre || state.products.find((product) => String(product.id) === String(row.producto_id))?.nombre || "Producto",
+      lote: row.insumo_lotes?.lote || "-",
+      fechaVencimiento: row.insumo_lotes?.fecha_vencimiento || null
+    }));
+  } catch (error) {
+    state.movements = [];
+    console.warn("No se pudo cargar historial de movimientos", error);
+  }
+}
+
 function loadFallbackInventory(error) {
   state.inventory = mockInventory.map((item) => ({ ...item }));
   state.products = mockInventory.map((item) => ({
@@ -361,11 +479,15 @@ function loadFallbackInventory(error) {
     nombre_normalizado: normalize(item.nombre),
     unidad_default: item.unidad,
     stock_minimo: item.stockMinimo,
+    consumo_promedio_diario: item.critico ? 4 : 0,
+    favorito: Boolean(item.critico),
+    critico: Boolean(item.critico),
     activo: true
   }));
   state.lowStockProducts = state.inventory
     .filter((item) => item.cantidad < item.stockMinimo)
     .map((item) => ({ producto_id: item.productoId, nombre: item.nombre, stock_actual: item.cantidad, stock_minimo: item.stockMinimo }));
+  state.movements = [];
   state.usingFallback = true;
   renderProductSuggestions();
   elements.inventorySourceText.textContent = "Supabase no respondio correctamente. Mostrando datos mock de respaldo.";
@@ -375,6 +497,7 @@ function loadFallbackInventory(error) {
 async function refreshInventory() {
   try {
     await loadInventoryFromSupabase();
+    await loadMovementHistory();
   } catch (error) {
     loadFallbackInventory(error);
   }
@@ -397,6 +520,18 @@ function renderProductSuggestions() {
 function findProductByName(name) {
   const normalized = normalize(name);
   return state.products.find((product) => product.nombre_normalizado === normalized || normalize(product.nombre) === normalized);
+}
+
+function findProductById(id) {
+  return state.products.find((product) => String(product.id) === String(id));
+}
+
+function getProductLots(productId) {
+  return state.inventory.filter((item) => String(item.productoId) === String(productId));
+}
+
+function getProductStockTotal(productId) {
+  return getProductLots(productId).reduce((sum, lot) => sum + Number(lot.cantidad || 0), 0);
 }
 
 function maybeAutofillUnit(nameInput, unitInput) {
@@ -435,13 +570,266 @@ function getLowStockDetailItems() {
   });
 }
 
+function getCriticalSummaries() {
+  return state.products
+    .filter((product) => product.critico)
+    .map((product) => {
+      const lots = getProductLots(product.id);
+      const stockActual = lots.reduce((sum, lot) => sum + Number(lot.cantidad || 0), 0);
+      const unidad = product.unidad_default || lots[0]?.unidad || "-";
+      const stockMinimo = Number(product.stock_minimo || 0);
+      const consumoPromedioDiario = Number(product.consumo_promedio_diario || 0);
+      const diasCobertura = consumoPromedioDiario > 0 ? stockActual / consumoPromedioDiario : null;
+      let estado = "OK";
+      let statusKey = "ok";
+      let badge = "ESTABLE";
+      let coverageLabel = "Sin consumo configurado";
+      let coverageKey = "sin-consumo";
+
+      if (stockActual <= 0) {
+        estado = "Sin stock";
+        statusKey = "sin-stock";
+        badge = "CRITICO URGENTE";
+      } else if (stockMinimo > 0 && stockActual < stockMinimo) {
+        estado = "Bajo stock";
+        statusKey = "bajo-stock";
+        badge = "COMPRAR PRONTO";
+      } else if (stockMinimo <= 0) {
+        estado = "Sin minimo definido";
+        statusKey = "sin-minimo";
+        badge = "SIN MINIMO";
+      }
+
+      if (consumoPromedioDiario > 0) {
+        const days = Math.floor(diasCobertura);
+        coverageLabel = `${formatNumber(diasCobertura)} dias`;
+        if (days <= 0) {
+          coverageKey = "sin-stock";
+          badge = "CRITICO URGENTE";
+        } else if (diasCobertura <= 2) {
+          coverageKey = "urgente";
+          badge = "CRITICO URGENTE";
+        } else if (diasCobertura <= 5) {
+          coverageKey = "comprar-pronto";
+          if (badge === "ESTABLE") badge = "COMPRAR PRONTO";
+        } else {
+          coverageKey = "ok";
+        }
+      } else if (stockActual > 0) {
+        badge = statusKey === "sin-minimo" ? "SIN MINIMO" : "SIN CONSUMO";
+      }
+
+      return {
+        productoId: product.id,
+        nombre: product.nombre,
+        stockActual,
+        unidad,
+        stockMinimo,
+        consumoPromedioDiario,
+        diasCobertura,
+        coverageLabel,
+        coverageKey,
+        estado,
+        statusKey,
+        badge,
+        favorito: Boolean(product.favorito),
+        warning: stockMinimo <= 0 ? "Producto critico sin stock minimo definido." : ""
+      };
+    })
+    .sort((a, b) => {
+      const order = { "sin-stock": 0, "bajo-stock": 1, "sin-minimo": 2, ok: 3 };
+      return order[a.statusKey] - order[b.statusKey] || a.nombre.localeCompare(b.nombre);
+    });
+}
+
+function renderCriticalProducts() {
+  const items = getCriticalSummaries();
+  if (!items.length) {
+    elements.criticalProductsList.innerHTML = '<div class="empty compact-empty">No hay productos criticos configurados.</div>';
+    return;
+  }
+
+  elements.criticalProductsList.innerHTML = items
+    .map((item) => `
+      <article class="critical-item ${item.statusKey}">
+        <div>
+          <strong>${escapeHtml(item.nombre)}</strong>
+          <span>${formatNumber(item.stockActual)} ${escapeHtml(item.unidad)} disponibles</span>
+          <span>Cobertura: ${escapeHtml(item.coverageLabel)}</span>
+          ${item.warning ? `<em>${escapeHtml(item.warning)}</em>` : ""}
+        </div>
+        <div class="critical-meta">
+          <span>Min: ${formatNumber(item.stockMinimo)}</span>
+          <b>${item.badge}</b>
+          <button class="btn small" type="button" data-settings-product="${item.productoId}">Configurar</button>
+        </div>
+      </article>
+    `)
+    .join("");
+}
+
+function renderCompactCriticalView() {
+  const items = getCriticalSummaries();
+  if (!items.length) {
+    elements.compactCriticalList.innerHTML = '<div class="empty compact-empty">No hay productos criticos configurados.</div>';
+    return;
+  }
+
+  elements.compactCriticalList.innerHTML = items
+    .map((item) => `
+      <article class="compact-critical-item ${item.statusKey}">
+        <strong>${escapeHtml(item.nombre)}</strong>
+        <span>${formatNumber(item.stockActual)} ${escapeHtml(item.unidad)}</span>
+        <span>Min ${formatNumber(item.stockMinimo)}</span>
+        <span>${escapeHtml(item.coverageLabel)}</span>
+        <b>${escapeHtml(item.badge)}</b>
+      </article>
+    `)
+    .join("");
+}
+
+function renderQuickProducts() {
+  const favorites = state.products.filter((product) => product.favorito);
+  if (!favorites.length) {
+    elements.quickProductsList.innerHTML = '<div class="empty compact-empty">Marca productos como favoritos para acceso rapido.</div>';
+    return;
+  }
+
+  elements.quickProductsList.innerHTML = favorites
+    .map((product) => `
+      <button class="quick-product-btn" type="button" data-favorite-use="${product.id}">
+        <strong>${escapeHtml(product.nombre)}</strong>
+        <span>${formatNumber(getProductStockTotal(product.id))} ${escapeHtml(product.unidad_default || "")}</span>
+      </button>
+    `)
+    .join("");
+}
+
+function renderUseFirst() {
+  const items = getAlertItems();
+  if (!items.length) {
+    elements.useFirstList.innerHTML = '<div class="empty compact-empty">No hay lotes urgentes para rotar.</div>';
+    return;
+  }
+
+  elements.useFirstList.innerHTML = items
+    .slice(0, 8)
+    .map((item) => `
+      <article class="use-first-item ${item.status.key}">
+        <div>
+          <strong>${escapeHtml(item.nombre)}</strong>
+          <span>${escapeHtml(item.lote || "sin lote")} - ${item.cantidad} ${escapeHtml(item.unidad)}</span>
+          <b class="ops-badge ${item.status.key === "vencido" ? "urgente" : "soon"}">${item.status.key === "vencido" ? "CRITICO URGENTE" : "COMPRAR PRONTO"}</b>
+        </div>
+        <div class="use-first-meta">
+          ${renderMonthBadge(item.fechaVencimiento)}
+          <span>${formatDisplayDate(item.fechaVencimiento)} - ${formatDays(item.status.days)}</span>
+        </div>
+      </article>
+    `)
+    .join("");
+}
+
+function getFilteredMovements() {
+  const productQuery = normalize(elements.historyProductFilter?.value || "");
+  const type = elements.historyTypeFilter?.value || "";
+  const from = elements.historyFromFilter?.value || "";
+  const to = elements.historyToFilter?.value || "";
+
+  return state.movements.filter((movement) => {
+    const movementDate = movement.fecha ? movement.fecha.slice(0, 10) : "";
+    if (productQuery && !normalize(movement.producto).includes(productQuery)) return false;
+    if (type && movement.tipo !== type) return false;
+    if (from && movementDate < from) return false;
+    if (to && movementDate > to) return false;
+    return true;
+  });
+}
+
+function renderHistory() {
+  const rows = getFilteredMovements();
+  if (!rows.length) {
+    elements.historyTableBody.innerHTML = '<tr><td colspan="8" class="empty">No hay movimientos para mostrar.</td></tr>';
+    return;
+  }
+
+  elements.historyTableBody.innerHTML = rows
+    .map((movement) => `
+      <tr>
+        <td>${formatDisplayDate((movement.fecha || "").slice(0, 10))}</td>
+        <td><strong>${escapeHtml(movement.producto)}</strong></td>
+        <td>${escapeHtml(movement.lote || "-")}</td>
+        <td>
+          <span class="movement-type">${escapeHtml(movement.tipo)}</span>
+          ${movement.desviacionFifo ? '<span class="fifo-badge">Desviacion FIFO</span>' : ""}
+        </td>
+        <td>${movement.cantidad}</td>
+        <td>${escapeHtml(movement.unidad)}</td>
+        <td>${escapeHtml(movement.motivo || "-")}</td>
+        <td>${escapeHtml(movement.observacion || "-")}</td>
+      </tr>
+    `)
+    .join("");
+}
+
+function getRecentMovements(days = 30) {
+  const from = new Date();
+  from.setHours(0, 0, 0, 0);
+  from.setDate(from.getDate() - days);
+  return state.movements.filter((movement) => {
+    if (!movement.fecha) return false;
+    return new Date(movement.fecha) >= from;
+  });
+}
+
+function getTopMovements(type, { deviationOnly = false } = {}) {
+  const totals = new Map();
+  getRecentMovements().forEach((movement) => {
+    if (movement.tipo !== type) return;
+    if (deviationOnly && !movement.desviacionFifo) return;
+    const current = totals.get(movement.producto) || 0;
+    totals.set(movement.producto, current + Number(movement.cantidad || 0));
+  });
+  return [...totals.entries()]
+    .map(([producto, total]) => ({ producto, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+}
+
+function renderAnalytics() {
+  const groups = [
+    { title: "Mas consumidos", rows: getTopMovements("consumo") },
+    { title: "Mas ajustes", rows: getTopMovements("ajuste_manual") },
+    { title: "Mas mermas", rows: getTopMovements("merma") },
+    { title: "Desviaciones FIFO", rows: getTopMovements("consumo", { deviationOnly: true }) }
+  ];
+
+  elements.analyticsGrid.innerHTML = groups
+    .map((group) => `
+      <article class="analytics-card">
+        <h3>${escapeHtml(group.title)}</h3>
+        ${group.rows.length ? group.rows.map((row) => `
+          <div class="analytics-row">
+            <span>${escapeHtml(row.producto)}</span>
+            <strong>${formatNumber(row.total)}</strong>
+          </div>
+        `).join("") : '<div class="empty compact-empty">Sin datos.</div>'}
+      </article>
+    `)
+    .join("");
+}
+
 function updateMetrics() {
   const withStatus = state.inventory.map((item) => ({ ...item, status: getStatus(item) }));
   const alerts = getAlertItems();
   elements.totalItems.textContent = state.inventory.length;
   elements.soonItems.textContent = withStatus.filter((item) => ["hoy", "proximo"].includes(item.status.key)).length;
   elements.expiredItems.textContent = withStatus.filter((item) => item.status.key === "vencido").length;
-  elements.lowStockItems.textContent = state.lowStockProducts.length;
+  const lowStockIds = new Set(state.lowStockProducts.map((item) => String(item.producto_id)));
+  getCriticalSummaries()
+    .filter((item) => item.statusKey === "sin-stock")
+    .forEach((item) => lowStockIds.add(String(item.productoId)));
+  elements.lowStockItems.textContent = lowStockIds.size;
   elements.alertCount.textContent = `${alerts.length} alertas`;
 }
 
@@ -495,6 +883,11 @@ function renderInventory() {
           <td><span class="status ${status.key}">${status.label}</span></td>
           <td class="row-actions">
             <button class="btn small" type="button" data-use-id="${item.id}">Usar</button>
+            <button class="btn small" type="button" data-quick-use="${item.productoId}" data-quick-qty="1">Usar 1</button>
+            <button class="btn small" type="button" data-quick-use="${item.productoId}" data-quick-qty="5">Usar 5</button>
+            <button class="btn small" type="button" data-quick-use="${item.productoId}" data-quick-qty="10">Usar 10</button>
+            <button class="btn small" type="button" data-adjust-id="${item.id}">Ajustar</button>
+            <button class="btn small" type="button" data-settings-product="${item.productoId}">Min</button>
             <button class="btn small" type="button" data-edit-id="${item.id}">Editar</button>
             <button class="btn small danger-btn" type="button" data-delete-id="${item.id}">Eliminar</button>
           </td>
@@ -506,8 +899,14 @@ function renderInventory() {
 
 function render() {
   updateMetrics();
+  renderCriticalProducts();
+  renderCompactCriticalView();
+  renderQuickProducts();
+  renderUseFirst();
   renderAlerts();
   renderInventory();
+  renderHistory();
+  renderAnalytics();
 }
 
 function openEntryModal() {
@@ -573,6 +972,7 @@ function getFormPayload(form) {
   const unidad = formData.get("unidad");
   const fechaRecepcion = formData.get("fecha_recepcion");
   const fechaVencimiento = formData.get("fecha_vencimiento") || null;
+  const critico = formData.get("critico") === "on";
 
   if (!nombre) throw new Error("El nombre del producto es obligatorio.");
   if (!cantidad || cantidad <= 0) throw new Error("La cantidad debe ser mayor que cero.");
@@ -586,6 +986,7 @@ function getFormPayload(form) {
     unidad,
     fechaRecepcion,
     fechaVencimiento,
+    critico,
     lote: formData.get("lote").trim() || null,
     observaciones: formData.get("observaciones").trim() || null
   };
@@ -598,6 +999,7 @@ function validateBulkRow(rawRow) {
   const unidad = rawRow.unidad.trim() || "kg";
   const fechaRecepcion = elements.bulkReceiptDate.value || formatIsoDate(new Date());
   const fechaVencimiento = rawRow.fecha_vencimiento.trim() ? parseDateInput(rawRow.fecha_vencimiento) : null;
+  const critico = Boolean(rawRow.critico);
 
   if (!nombre) errors.push("producto obligatorio");
   if (!cantidad || cantidad <= 0) errors.push("cantidad debe ser mayor que cero");
@@ -615,6 +1017,7 @@ function validateBulkRow(rawRow) {
       unidad,
       fechaRecepcion,
       fechaVencimiento,
+      critico,
       lote: rawRow.lote.trim() || null,
       observaciones: rawRow.observaciones.trim() || null
     }
@@ -623,16 +1026,36 @@ function validateBulkRow(rawRow) {
 
 async function findOrCreateProduct(payload) {
   const cached = state.products.find((product) => product.nombre_normalizado === payload.nombreNormalizado);
-  if (cached) return cached;
+  if (cached) {
+    if (payload.critico && !cached.critico && !state.usingFallback) {
+      const { error } = await supabaseClient
+        .from("productos_insumos")
+        .update({ critico: true })
+        .eq("id", cached.id);
+      if (error) throw error;
+      cached.critico = true;
+    }
+    return cached;
+  }
 
   const { data: existingProduct, error: findError } = await supabaseClient
     .from("productos_insumos")
-    .select("id,nombre,nombre_normalizado,unidad_default")
+    .select("id,nombre,nombre_normalizado,unidad_default,stock_minimo,critico,consumo_promedio_diario,favorito,activo")
     .eq("nombre_normalizado", payload.nombreNormalizado)
     .maybeSingle();
 
   if (findError) throw findError;
-  if (existingProduct) return existingProduct;
+  if (existingProduct) {
+    if (payload.critico && !existingProduct.critico) {
+      const { error } = await supabaseClient
+        .from("productos_insumos")
+        .update({ critico: true })
+        .eq("id", existingProduct.id);
+      if (error) throw error;
+      existingProduct.critico = true;
+    }
+    return existingProduct;
+  }
 
   const { data: createdProduct, error: createError } = await supabaseClient
     .from("productos_insumos")
@@ -641,9 +1064,12 @@ async function findOrCreateProduct(payload) {
       nombre_normalizado: payload.nombreNormalizado,
       unidad_default: payload.unidad,
       stock_minimo: 0,
+      critico: Boolean(payload.critico),
+      consumo_promedio_diario: 0,
+      favorito: false,
       activo: true
     })
-    .select("id,nombre,nombre_normalizado,unidad_default")
+    .select("id,nombre,nombre_normalizado,unidad_default,stock_minimo,critico")
     .single();
 
   if (createError) throw createError;
@@ -893,6 +1319,7 @@ function openUseModal(prefillItem = null) {
   if (prefillItem) {
     elements.useForm.elements.nombre.value = prefillItem.nombre;
     elements.useForm.elements.unidad.value = prefillItem.unidad;
+    if (prefillItem.cantidadUsar) elements.useForm.elements.cantidad.value = prefillItem.cantidadUsar;
   }
   elements.manualLotPanel.hidden = true;
   elements.fifoDeviationWarning.hidden = true;
@@ -961,10 +1388,394 @@ async function registerUse() {
   if (error) throw error;
 }
 
+function getAdjustFormProduct() {
+  const nombre = elements.adjustForm.elements.nombre.value.trim();
+  const product = findProductByName(nombre);
+  return { nombre, product };
+}
+
+function renderAdjustLots() {
+  const { product } = getAdjustFormProduct();
+  const unidad = elements.adjustForm.elements.unidad.value;
+  const lots = product ? getProductLotsForUse(product.id, unidad) : [];
+
+  elements.adjustLotSelect.innerHTML = lots.length
+    ? lots.map((lot) => `
+        <option value="${escapeHtml(lot.id)}">
+          ${escapeHtml(lot.lote || "sin lote")} - ${lot.cantidad} ${escapeHtml(lot.unidad)} - ${formatDisplayDate(lot.fechaVencimiento)}
+        </option>
+      `).join("")
+    : '<option value="">Sin lotes disponibles</option>';
+
+  updateAdjustSystemStock();
+}
+
+function updateAdjustSystemStock() {
+  const lotId = elements.adjustLotSelect.value;
+  const lot = state.inventory.find((item) => String(item.id) === String(lotId));
+  const stock = lot ? Number(lot.cantidad || 0) : 0;
+  elements.adjustSystemStock.value = stock;
+  if (lot) elements.adjustForm.elements.unidad.value = lot.unidad;
+}
+
+function openAdjustModal(prefillItem = null) {
+  elements.adjustForm.reset();
+  elements.adjustForm.elements.motivo.value = "conteo fisico";
+  if (prefillItem) {
+    elements.adjustForm.elements.nombre.value = prefillItem.nombre;
+    elements.adjustForm.elements.unidad.value = prefillItem.unidad;
+  }
+  renderAdjustLots();
+  if (prefillItem) {
+    elements.adjustLotSelect.value = prefillItem.id;
+    updateAdjustSystemStock();
+  }
+  elements.adjustModal.hidden = false;
+  elements.adjustForm.elements.nombre.focus();
+}
+
+function closeAdjustModal() {
+  elements.adjustModal.hidden = true;
+}
+
+async function registerAdjustment() {
+  if (state.usingFallback) throw new Error("No se puede ajustar inventario mientras Supabase esta en modo respaldo.");
+
+  const { product } = getAdjustFormProduct();
+  const lotId = elements.adjustForm.elements.lote_id.value;
+  const lot = state.inventory.find((item) => String(item.id) === String(lotId));
+  const systemStock = Number(elements.adjustForm.elements.stock_sistema.value || 0);
+  const realStock = Number(elements.adjustForm.elements.stock_real.value);
+  const unidad = elements.adjustForm.elements.unidad.value;
+  const motivo = elements.adjustForm.elements.motivo.value;
+  const observacion = elements.adjustForm.elements.observacion.value.trim() || null;
+
+  if (!product) throw new Error("Producto obligatorio.");
+  if (!lot) throw new Error("Selecciona un lote con stock disponible.");
+  if (Number.isNaN(realStock) || realStock < 0) throw new Error("El stock real contado debe ser cero o mayor.");
+
+  const delta = Number((realStock - systemStock).toFixed(3));
+  if (delta === 0) throw new Error("No hay diferencia para ajustar.");
+
+  const movement = {
+    producto_id: product.id,
+    lote_id: lot.id,
+    tipo_movimiento: delta > 0 ? "ajuste_manual" : motivo === "merma" ? "merma" : "merma",
+    cantidad: Math.abs(delta),
+    unidad,
+    motivo,
+    observacion
+  };
+
+  const { error } = await supabaseClient
+    .from("movimientos_inventario")
+    .insert(movement);
+
+  if (error) throw error;
+}
+
+function csvEscape(value) {
+  const text = value == null ? "" : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function downloadCsv(filename, rows) {
+  if (!rows.length) {
+    showToastError("No hay datos para exportar.");
+    return;
+  }
+
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.map(csvEscape).join(";"),
+    ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(";"))
+  ].join("\n");
+  const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function getExportRows(type) {
+  if (type === "criticos") return getCriticalSummaries().map((item) => ({
+    producto: item.nombre,
+    stock_actual: item.stockActual,
+    unidad: item.unidad,
+    stock_minimo: item.stockMinimo,
+    consumo_promedio_diario: item.consumoPromedioDiario,
+    dias_cobertura: item.coverageLabel,
+    estado: item.estado,
+    badge: item.badge,
+    advertencia: item.warning
+  }));
+
+  if (type === "alertas") return getAlertItems().map((item) => ({
+    producto: item.nombre,
+    cantidad: item.cantidad,
+    unidad: item.unidad,
+    fecha_vencimiento: formatDisplayDate(item.fechaVencimiento),
+    dias: formatDays(item.status.days),
+    lote: item.lote || "",
+    estado: item.status.label,
+    observaciones: item.observaciones || ""
+  }));
+
+  if (type === "historial") return getFilteredMovements().map((movement) => ({
+    fecha: formatDisplayDate((movement.fecha || "").slice(0, 10)),
+    producto: movement.producto,
+    lote: movement.lote,
+    tipo_movimiento: movement.tipo,
+    cantidad: movement.cantidad,
+    unidad: movement.unidad,
+    motivo: movement.motivo,
+    observacion: movement.observacion,
+    desviacion_fifo: movement.desviacionFifo ? "si" : "no"
+  }));
+
+  return state.inventory.map((item) => ({
+    producto: item.nombre,
+    cantidad: item.cantidad,
+    unidad: item.unidad,
+    fecha_recepcion: formatDisplayDate(item.fechaRecepcion),
+    fecha_vencimiento: formatDisplayDate(item.fechaVencimiento),
+    mes: getMonthInfo(item.fechaVencimiento)?.label || "Sin fecha",
+    lote: item.lote || "",
+    estado: getStatus(item).label,
+    observaciones: item.observaciones || ""
+  }));
+}
+
+function openExportModal() {
+  elements.exportModal.hidden = false;
+}
+
+function closeExportModal() {
+  elements.exportModal.hidden = true;
+}
+
+function exportSelectedCsv() {
+  const type = elements.exportType.value;
+  const filenames = {
+    inventario: "jesunutri_inventario.csv",
+    criticos: "jesunutri_productos_criticos.csv",
+    alertas: "jesunutri_alertas_vencimiento.csv",
+    historial: "jesunutri_historial_movimientos.csv"
+  };
+  downloadCsv(filenames[type] || "jesunutri_export.csv", getExportRows(type));
+  showToastSuccess("Exportadito.");
+  closeExportModal();
+}
+
+function openLabelsModal() {
+  const items = state.inventory;
+  elements.labelsList.innerHTML = items.length
+    ? items.map((item) => `
+        <label class="label-row">
+          <input type="checkbox" value="${escapeHtml(item.id)}" checked>
+          <span>
+            <strong>${escapeHtml(item.nombre)}</strong>
+            <small>${escapeHtml(item.lote || "sin lote")} - ${item.cantidad} ${escapeHtml(item.unidad)} - ${formatDisplayDate(item.fechaVencimiento)}</small>
+          </span>
+          ${renderMonthBadge(item.fechaVencimiento)}
+        </label>
+      `).join("")
+    : '<div class="empty">No hay lotes disponibles para etiquetar.</div>';
+  elements.labelsModal.hidden = false;
+}
+
+function closeLabelsModal() {
+  elements.labelsModal.hidden = true;
+}
+
+function getSelectedLabelItems() {
+  const selectedIds = [...elements.labelsList.querySelectorAll('input[type="checkbox"]:checked')].map((input) => String(input.value));
+  return state.inventory.filter((item) => selectedIds.includes(String(item.id)));
+}
+
+function printSelectedLabels() {
+  const items = getSelectedLabelItems();
+  if (!items.length) {
+    showToastError("Selecciona al menos un lote.");
+    return;
+  }
+
+  const labels = items.map((item) => {
+    const month = getMonthInfo(item.fechaVencimiento);
+    return `
+      <article class="print-label">
+        <h1>${escapeHtml(item.nombre)}</h1>
+        <div class="print-month">
+          <span style="background:${month ? month.color : "#8792a2"}"></span>
+          ${month ? `${month.label} ${month.year}` : "Sin fecha"}
+        </div>
+        <p>Vence: ${formatDisplayDate(item.fechaVencimiento)}</p>
+        <p>Lote: ${escapeHtml(item.lote || "sin lote")}</p>
+        <p>${item.cantidad} ${escapeHtml(item.unidad)} disponibles</p>
+      </article>
+    `;
+  }).join("");
+
+  const printWindow = window.open("", "_blank", "width=900,height=700");
+  if (!printWindow) {
+    showToastError("No se pudo abrir la vista de impresion.");
+    return;
+  }
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <title>Etiquetas Jesunutri</title>
+        <style>
+          body { margin: 0; padding: 18px; font-family: Arial, sans-serif; color: #111827; }
+          .sheet { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+          .print-label { min-height: 210px; border: 2px solid #111827; border-radius: 10px; padding: 16px; break-inside: avoid; }
+          h1 { margin: 0 0 12px; font-size: 28px; line-height: 1.05; }
+          p { margin: 8px 0; font-size: 18px; }
+          .print-month { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 26px; font-weight: 900; }
+          .print-month span { width: 22px; height: 22px; border-radius: 999px; border: 1px solid #111827; }
+          @media print { body { padding: 0; } .sheet { gap: 0; } .print-label { border-radius: 0; } }
+        </style>
+      </head>
+      <body><main class="sheet">${labels}</main></body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+  showToastSuccess("Etiquetas listas.");
+}
+
+function openProductSettings(productId) {
+  const product = findProductById(productId);
+  if (!product) {
+    showToastError("Producto no encontrado.");
+    return;
+  }
+
+  elements.productSettingsForm.reset();
+  elements.productSettingsForm.elements.producto_id.value = product.id;
+  elements.productSettingsForm.elements.stock_minimo.value = Number(product.stock_minimo || 0);
+  elements.productSettingsForm.elements.unidad_default.value = product.unidad_default || "kg";
+  elements.productSettingsForm.elements.consumo_promedio_diario.value = Number(product.consumo_promedio_diario || 0);
+  elements.productSettingsForm.elements.favorito.checked = Boolean(product.favorito);
+  elements.productSettingsForm.elements.critico.checked = Boolean(product.critico);
+  elements.productSettingsName.textContent = product.nombre;
+  elements.pauseProductBtn.textContent = product.activo === false ? "Reactivar producto" : "Pausar producto";
+  elements.productSettingsModal.hidden = false;
+  elements.productSettingsForm.elements.stock_minimo.focus();
+}
+
+function closeProductSettingsModal() {
+  elements.productSettingsModal.hidden = true;
+}
+
+async function saveProductSettings() {
+  if (state.usingFallback) throw new Error("No se puede configurar producto mientras Supabase esta en modo respaldo.");
+
+  const form = elements.productSettingsForm;
+  const productId = form.elements.producto_id.value;
+  const stockMinimo = Number(form.elements.stock_minimo.value);
+  const consumoPromedioDiario = Number(form.elements.consumo_promedio_diario.value);
+  const unidadDefault = form.elements.unidad_default.value;
+
+  if (stockMinimo < 0) throw new Error("El stock minimo no puede ser negativo.");
+  if (consumoPromedioDiario < 0) throw new Error("El consumo promedio diario no puede ser negativo.");
+
+  const { error } = await supabaseClient
+    .from("productos_insumos")
+    .update({
+      stock_minimo: stockMinimo,
+      unidad_default: unidadDefault,
+      consumo_promedio_diario: consumoPromedioDiario,
+      favorito: form.elements.favorito.checked,
+      critico: form.elements.critico.checked
+    })
+    .eq("id", productId);
+
+  if (error) throw error;
+}
+
+async function toggleProductActive() {
+  if (state.usingFallback) throw new Error("No se puede pausar producto mientras Supabase esta en modo respaldo.");
+
+  const productId = elements.productSettingsForm.elements.producto_id.value;
+  const product = findProductById(productId);
+  if (!product) throw new Error("Producto no encontrado.");
+  const nextActive = product.activo === false;
+  const confirmed = await showModalConfirm({
+    title: `${nextActive ? "Reactivar" : "Pausar"} "${product.nombre}"`,
+    message: "",
+    confirmText: nextActive ? "Reactivar" : "Pausar",
+    cancelText: "Cancelar",
+    variant: nextActive ? "success" : "warning"
+  });
+  if (!confirmed) return;
+
+  const { error } = await supabaseClient
+    .from("productos_insumos")
+    .update({ activo: nextActive })
+    .eq("id", productId);
+
+  if (error) throw error;
+  closeProductSettingsModal();
+  showToastSuccess(nextActive ? "Producto reactivado." : "Producto pausado.");
+  await refreshInventory();
+}
+
+function openQuickUse(productId, quantity = "") {
+  const product = findProductById(productId);
+  if (!product) {
+    showToastError("Producto no encontrado.");
+    return;
+  }
+  openUseModal({
+    nombre: product.nombre,
+    unidad: product.unidad_default || "kg",
+    cantidadUsar: quantity
+  });
+}
+
+function exportBackupCsv() {
+  downloadCsv("jesunutri_backup_inventario.csv", getExportRows("inventario"));
+  downloadCsv("jesunutri_backup_productos.csv", state.products.map((product) => ({
+    id: product.id,
+    nombre: product.nombre,
+    nombre_normalizado: product.nombre_normalizado,
+    unidad_default: product.unidad_default,
+    stock_minimo: product.stock_minimo,
+    consumo_promedio_diario: product.consumo_promedio_diario || 0,
+    critico: product.critico ? "si" : "no",
+    favorito: product.favorito ? "si" : "no",
+    activo: product.activo === false ? "no" : "si"
+  })));
+  downloadCsv("jesunutri_backup_movimientos.csv", getExportRows("historial"));
+  downloadCsv("jesunutri_backup_criticos.csv", getExportRows("criticos"));
+  showToastSuccess("Backup CSV generado.");
+}
+
+function toggleScreenMode() {
+  document.body.classList.toggle("screen-mode");
+  const active = document.body.classList.contains("screen-mode");
+  document.getElementById("screenModeBtn").textContent = active ? "Salir pantalla" : "Modo pantalla";
+}
+
 function createBulkInput(name, type = "text", value = "") {
   const input = document.createElement(type === "select" ? "select" : "input");
   input.dataset.field = name;
   input.className = "bulk-input";
+
+  if (type === "checkbox") {
+    input.type = "checkbox";
+    input.className = "bulk-checkbox";
+    input.checked = value === true || value === "true" || value === "1" || normalize(value || "") === "si";
+    return input;
+  }
 
   if (type === "select") {
     UNIT_OPTIONS.forEach((unit) => {
@@ -994,7 +1805,7 @@ function addBulkRow(values = {}, focusFirst = false) {
   const tr = document.createElement("tr");
   BULK_COLUMNS.forEach((column) => {
     const td = document.createElement("td");
-    const type = column === "cantidad" ? "number" : column === "unidad" ? "select" : column.startsWith("fecha") ? "date" : "text";
+    const type = column === "cantidad" ? "number" : column === "unidad" ? "select" : column === "critico" ? "checkbox" : column.startsWith("fecha") ? "date" : "text";
     td.appendChild(createBulkInput(column, type, values[column] ?? ""));
     tr.appendChild(td);
     if (column === "fecha_vencimiento") {
@@ -1037,14 +1848,17 @@ function getBulkRows() {
   return [...elements.bulkTableBody.querySelectorAll("tr")].map((tr) => {
     const row = {};
     BULK_COLUMNS.forEach((column) => {
-      row[column] = tr.querySelector(`[data-field="${column}"]`).value;
+      const input = tr.querySelector(`[data-field="${column}"]`);
+      row[column] = input.type === "checkbox" ? input.checked : input.value;
     });
     return { tr, row };
   });
 }
 
 function isBulkRowEmpty(row) {
-  return BULK_COLUMNS.every((column) => !row[column].trim());
+  return BULK_COLUMNS
+    .filter((column) => column !== "critico")
+    .every((column) => !row[column].trim());
 }
 
 function markBulkValidation(results) {
@@ -1105,7 +1919,11 @@ function pasteExcelData(event) {
       if (!columnName) return;
       const input = row.querySelector(`[data-field="${columnName}"]`);
       if (!input) return;
-      input.value = columnName.startsWith("fecha") ? parseDateInput(cellValue) || "" : cellValue.trim();
+      if (input.type === "checkbox") {
+        input.checked = ["si", "sí", "true", "1", "x"].includes(normalize(cellValue));
+      } else {
+        input.value = columnName.startsWith("fecha") ? parseDateInput(cellValue) || "" : cellValue.trim();
+      }
       if (columnName === "nombre") maybeAutofillUnit(input, row.querySelector('[data-field="unidad"]'));
       if (columnName === "fecha_vencimiento") row.querySelector(".bulk-month-cell").innerHTML = renderMonthBadge(input.value);
     });
@@ -1206,6 +2024,31 @@ document.addEventListener("click", (event) => {
   if (useButton) {
     const item = state.inventory.find((entry) => String(entry.id) === String(useButton.dataset.useId));
     if (item) openUseModal(item);
+    return;
+  }
+
+  const adjustButton = event.target.closest("[data-adjust-id]");
+  if (adjustButton) {
+    const item = state.inventory.find((entry) => String(entry.id) === String(adjustButton.dataset.adjustId));
+    if (item) openAdjustModal(item);
+    return;
+  }
+
+  const settingsButton = event.target.closest("[data-settings-product]");
+  if (settingsButton) {
+    openProductSettings(settingsButton.dataset.settingsProduct);
+    return;
+  }
+
+  const quickUseButton = event.target.closest("[data-quick-use]");
+  if (quickUseButton) {
+    openQuickUse(quickUseButton.dataset.quickUse, quickUseButton.dataset.quickQty || "");
+    return;
+  }
+
+  const favoriteUseButton = event.target.closest("[data-favorite-use]");
+  if (favoriteUseButton) {
+    openQuickUse(favoriteUseButton.dataset.favoriteUse);
     return;
   }
 
@@ -1393,11 +2236,136 @@ elements.detailModal.addEventListener("click", (event) => {
   if (event.target === elements.detailModal) closeDetailModal();
 });
 
+document.getElementById("adjustStockBtn").addEventListener("click", () => openAdjustModal());
+document.getElementById("closeAdjustModal").addEventListener("click", closeAdjustModal);
+document.getElementById("cancelAdjust").addEventListener("click", closeAdjustModal);
+elements.adjustModal.addEventListener("click", (event) => {
+  if (event.target === elements.adjustModal) closeAdjustModal();
+});
+elements.adjustForm.elements.nombre.addEventListener("input", () => {
+  maybeAutofillUnit(elements.adjustForm.elements.nombre, elements.adjustForm.elements.unidad);
+  renderAdjustLots();
+});
+elements.adjustForm.elements.unidad.addEventListener("change", renderAdjustLots);
+elements.adjustLotSelect.addEventListener("change", updateAdjustSystemStock);
+elements.adjustForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearError();
+  elements.saveAdjustBtn.disabled = true;
+  elements.saveAdjustBtn.textContent = "Guardando...";
+  try {
+    await registerAdjustment();
+    closeAdjustModal();
+    showToastSuccess("Ajustadito.");
+    await refreshInventory();
+  } catch (error) {
+    showError("No se pudo guardar el ajuste", error);
+  } finally {
+    elements.saveAdjustBtn.disabled = false;
+    elements.saveAdjustBtn.textContent = "Guardar ajuste";
+  }
+});
+
+document.getElementById("exportBtn").addEventListener("click", openExportModal);
+document.getElementById("closeExportModal").addEventListener("click", closeExportModal);
+document.getElementById("cancelExport").addEventListener("click", closeExportModal);
+elements.exportModal.addEventListener("click", (event) => {
+  if (event.target === elements.exportModal) closeExportModal();
+});
+document.getElementById("confirmExportBtn").addEventListener("click", exportSelectedCsv);
+
+document.getElementById("labelsBtn").addEventListener("click", openLabelsModal);
+document.getElementById("closeLabelsModal").addEventListener("click", closeLabelsModal);
+document.getElementById("cancelLabels").addEventListener("click", closeLabelsModal);
+elements.labelsModal.addEventListener("click", (event) => {
+  if (event.target === elements.labelsModal) closeLabelsModal();
+});
+elements.printLabelsBtn.addEventListener("click", printSelectedLabels);
+
+document.getElementById("backupBtn").addEventListener("click", exportBackupCsv);
+document.getElementById("screenModeBtn").addEventListener("click", toggleScreenMode);
+document.getElementById("criticalViewBtn").addEventListener("click", () => {
+  elements.compactCriticalPanel.hidden = !elements.compactCriticalPanel.hidden;
+});
+
+document.getElementById("closeProductSettingsModal").addEventListener("click", closeProductSettingsModal);
+document.getElementById("cancelProductSettings").addEventListener("click", closeProductSettingsModal);
+elements.productSettingsModal.addEventListener("click", (event) => {
+  if (event.target === elements.productSettingsModal) closeProductSettingsModal();
+});
+elements.pauseProductBtn.addEventListener("click", async () => {
+  try {
+    await toggleProductActive();
+  } catch (error) {
+    showError("No se pudo cambiar el estado del producto", error);
+  }
+});
+elements.productSettingsForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearError();
+  elements.saveProductSettingsBtn.disabled = true;
+  elements.saveProductSettingsBtn.textContent = "Guardando...";
+  try {
+    await saveProductSettings();
+    closeProductSettingsModal();
+    showToastSuccess("Stock minimo actualizado.");
+    await refreshInventory();
+  } catch (error) {
+    showError("No se pudo actualizar producto", error);
+  } finally {
+    elements.saveProductSettingsBtn.disabled = false;
+    elements.saveProductSettingsBtn.textContent = "Guardar";
+  }
+});
+
+[
+  elements.historyProductFilter,
+  elements.historyTypeFilter,
+  elements.historyFromFilter,
+  elements.historyToFilter
+].forEach((filter) => {
+  filter.addEventListener("input", renderHistory);
+  filter.addEventListener("change", renderHistory);
+});
+
 document.getElementById("importBtn").addEventListener("click", () => {
   showToastSuccess("Importacion desde foto/Excel queda pendiente.");
 });
 
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  state.deferredInstallPrompt = event;
+  if (!isStandaloneMode()) elements.installAppBtn.hidden = false;
+});
+
+elements.installAppBtn.addEventListener("click", async () => {
+  if (!state.deferredInstallPrompt) return;
+  state.deferredInstallPrompt.prompt();
+  await state.deferredInstallPrompt.userChoice;
+  state.deferredInstallPrompt = null;
+  elements.installAppBtn.hidden = true;
+});
+
+window.addEventListener("appinstalled", () => {
+  state.deferredInstallPrompt = null;
+  document.body.classList.add("app-installed");
+  elements.installAppBtn.hidden = true;
+  elements.installHint.hidden = true;
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("./service-worker.js")
+      .then(() => console.log("Service Worker registrado"))
+      .catch((error) => console.warn("No se pudo registrar Service Worker", error));
+  });
+}
+
+updateInstallUi();
 refreshInventory();
+
+
 
 
 
