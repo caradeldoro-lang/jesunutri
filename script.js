@@ -84,10 +84,16 @@ const state = {
   movements: [],
   lowStockProducts: [],
   deferredInstallPrompt: null,
+  currentUser: null,
   usingFallback: false
 };
 
 const elements = {
+  loginScreen: document.getElementById("loginScreen"),
+  loginForm: document.getElementById("loginForm"),
+  loginError: document.getElementById("loginError"),
+  loginBtn: document.getElementById("loginBtn"),
+  appShell: document.getElementById("appShell"),
   totalItems: document.getElementById("totalItems"),
   soonItems: document.getElementById("soonItems"),
   expiredItems: document.getElementById("expiredItems"),
@@ -286,6 +292,71 @@ function showError(message, error) {
 function clearError() {
   elements.errorBox.textContent = "";
   elements.errorBox.hidden = true;
+}
+
+function showLoginError(message) {
+  elements.loginError.textContent = message;
+  elements.loginError.hidden = false;
+}
+
+function clearLoginError() {
+  elements.loginError.textContent = "";
+  elements.loginError.hidden = true;
+}
+
+function showLogin() {
+  state.currentUser = null;
+  elements.appShell.hidden = true;
+  elements.loginScreen.hidden = false;
+  elements.loginForm.elements.email.focus();
+}
+
+function showApp() {
+  elements.loginScreen.hidden = true;
+  elements.appShell.hidden = false;
+}
+
+async function loadAuthorizedUser(authUser) {
+  const { data, error } = await supabaseClient
+    .from("usuarios_app")
+    .select("id,email,rol,activo")
+    .eq("id", authUser.id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data || data.activo !== true) {
+    await supabaseClient.auth.signOut();
+    throw new Error("Usuario sin acceso autorizado.");
+  }
+
+  state.currentUser = {
+    id: data.id,
+    email: data.email || authUser.email,
+    rol: data.rol
+  };
+  return state.currentUser;
+}
+
+async function startAuthenticatedApp(session) {
+  await loadAuthorizedUser(session.user);
+  showApp();
+  await refreshInventory();
+}
+
+async function checkInitialSession() {
+  clearLoginError();
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error || !data.session) {
+    showLogin();
+    return;
+  }
+
+  try {
+    await startAuthenticatedApp(data.session);
+  } catch (authError) {
+    showLogin();
+    showLoginError(authError.message || "No se pudo validar el acceso.");
+  }
 }
 
 function closeSystemModal(resolveValue = false) {
@@ -2157,6 +2228,34 @@ elements.detailModal.addEventListener("click", (event) => {
   if (event.target === elements.detailModal) closeDetailModal();
 });
 
+elements.loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearLoginError();
+  elements.loginBtn.disabled = true;
+  elements.loginBtn.textContent = "Ingresando...";
+
+  const formData = new FormData(elements.loginForm);
+  const email = formData.get("email").trim();
+  const password = formData.get("password");
+
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    await startAuthenticatedApp(data.session);
+    elements.loginForm.reset();
+  } catch (error) {
+    showLoginError(error.message === "Usuario sin acceso autorizado." ? error.message : "Email o password incorrecto.");
+  } finally {
+    elements.loginBtn.disabled = false;
+    elements.loginBtn.textContent = "Ingresar";
+  }
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+  showLogin();
+});
+
 document.getElementById("adjustStockBtn").addEventListener("click", () => openAdjustModal());
 document.getElementById("closeAdjustModal").addEventListener("click", closeAdjustModal);
 document.getElementById("cancelAdjust").addEventListener("click", closeAdjustModal);
@@ -2279,13 +2378,7 @@ if ("serviceWorker" in navigator) {
 }
 
 updateInstallUi();
-refreshInventory();
-
-
-
-
-
-
+checkInitialSession();
 
 
 
