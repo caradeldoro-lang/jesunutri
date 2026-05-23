@@ -1691,6 +1691,29 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   }
 }
 
+@media (max-width: 640px) {
+  .qty-unit-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .qty-unit-row input[name="cantidad"] {
+    width: 28px;
+    min-height: 16px;
+    height: 16px;
+    padding: 0 2px;
+    font-size: 0.72rem;
+  }
+
+  .date-lot-row {
+    grid-template-columns: max-content minmax(35px, 45px);
+  }
+
+  .date-lot-row input[name="lote"] {
+    width: 45px;
+    max-width: 45px;
+  }
+}
+
 
 
 
