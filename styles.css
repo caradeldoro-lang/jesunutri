@@ -1709,13 +1709,13 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
     justify-content: space-between;
     column-gap: 8px;
     align-items: end;
-    width: calc(100% + 10px);
-    margin-right: -10px;
+    width: calc(100% + 4px);
+    margin-right: -4px;
   }
 
   .bulk-modal .date-lot-row {
-    width: calc(100% + 20px);
-    margin-right: -20px;
+    width: calc(100% + 12px);
+    margin-right: -12px;
   }
 
   .date-lot-row input[name="lote"] {
