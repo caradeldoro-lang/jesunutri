@@ -1709,16 +1709,22 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
     justify-content: space-between;
     column-gap: 8px;
     align-items: end;
-    margin-right: -2px;
+    width: calc(100% + 10px);
+    margin-right: -10px;
   }
 
   .bulk-modal .date-lot-row {
-    margin-right: -12px;
+    width: calc(100% + 20px);
+    margin-right: -20px;
   }
 
   .date-lot-row input[name="lote"] {
     width: 68px;
     max-width: 68px;
+  }
+
+  .date-lot-row .pos-field:has(input[name="lote"]) {
+    justify-self: end;
   }
 }
 
