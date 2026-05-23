@@ -283,11 +283,12 @@ button, input, select, textarea { font: inherit; }
 }
 
 .qty-unit-row {
-  grid-template-columns: minmax(90px, 116px) minmax(0, 1fr);
+  grid-template-columns: 70px minmax(0, 1fr);
 }
 
 .date-lot-row {
-  grid-template-columns: minmax(190px, 0.95fr) minmax(120px, 1.05fr);
+  grid-template-columns: max-content minmax(140px, 180px);
+  justify-content: start;
 }
 
 .pos-field {
@@ -1337,8 +1338,11 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   .alert-card { grid-template-columns: 1fr; align-items: start; }
   .pos-summary summary { grid-template-columns: minmax(0, 1fr) auto; }
   .pos-product-row { grid-template-columns: minmax(0, 1fr) auto; }
-  .qty-unit-row { grid-template-columns: minmax(88px, 110px) minmax(0, 1fr); }
-  .date-lot-row { grid-template-columns: minmax(178px, 0.95fr) minmax(112px, 1.05fr); }
+  .qty-unit-row { grid-template-columns: 68px minmax(0, 1fr); }
+  .date-lot-row {
+    grid-template-columns: max-content minmax(130px, 170px);
+    justify-content: start;
+  }
   .pos-chip-list { justify-content: flex-start; }
   .unit-tiles { flex-wrap: wrap; }
 }
@@ -1476,12 +1480,12 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   }
 
   .qty-unit-row {
-    grid-template-columns: minmax(86px, 100px) minmax(0, 1fr);
+    grid-template-columns: 66px minmax(0, 1fr);
     gap: 8px;
   }
 
   .date-lot-row {
-    grid-template-columns: max-content minmax(150px, 180px);
+    grid-template-columns: max-content minmax(118px, 150px);
     justify-content: start;
     gap: 8px;
   }
@@ -1561,6 +1565,12 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   }
 
   .operator-panel .form-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .bulk-modal > .form-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
@@ -1649,11 +1659,11 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
     padding-inline: 10px;
   }
   .qty-unit-row {
-    grid-template-columns: minmax(86px, 100px) minmax(0, 1fr);
+    grid-template-columns: 66px minmax(0, 1fr);
     gap: 8px;
   }
   .date-lot-row {
-    grid-template-columns: max-content minmax(150px, 180px);
+    grid-template-columns: max-content minmax(118px, 150px);
     justify-content: start;
     gap: 8px;
   }
