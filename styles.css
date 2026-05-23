@@ -1480,14 +1480,14 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   }
 
   .qty-unit-row {
-    grid-template-columns: 66px minmax(0, 1fr);
-    gap: 8px;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 6px;
   }
 
   .date-lot-row {
-    grid-template-columns: max-content minmax(118px, 150px);
+    grid-template-columns: max-content minmax(96px, 112px);
     justify-content: start;
-    gap: 8px;
+    gap: 6px;
   }
 
   .pos-field {
@@ -1516,7 +1516,7 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
   }
 
   .unit-tiles label {
-    flex: 0 0 62px;
+    flex: 0 0 54px;
     min-height: 46px;
     border-radius: 7px;
     font-size: 0.84rem;
@@ -1524,25 +1524,25 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
 
   .unit-tiles select {
     flex: 0 0 auto;
-    width: 62px;
-    min-width: 62px;
+    width: 54px;
+    min-width: 54px;
     font-size: 0.78rem;
   }
 
   .expiry-box {
-    gap: 5px;
+    gap: 4px;
   }
 
   .expiry-box input {
-    flex: 0 0 64px;
-    width: 64px;
+    flex: 0 0 54px;
+    width: 54px;
     font-size: 1rem;
     text-align: center;
   }
 
   .expiry-box input[name="vence_yyyy"] {
-    flex-basis: 86px;
-    width: 86px;
+    flex-basis: 74px;
+    width: 74px;
   }
 
   .optional-note {
@@ -1659,26 +1659,26 @@ tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
     padding-inline: 10px;
   }
   .qty-unit-row {
-    grid-template-columns: 66px minmax(0, 1fr);
-    gap: 8px;
-  }
-  .date-lot-row {
-    grid-template-columns: max-content minmax(118px, 150px);
-    justify-content: start;
-    gap: 8px;
-  }
-  .unit-tiles {
+    grid-template-columns: 58px minmax(0, 1fr);
     gap: 6px;
   }
+  .date-lot-row {
+    grid-template-columns: max-content minmax(96px, 112px);
+    justify-content: start;
+    gap: 6px;
+  }
+  .unit-tiles {
+    gap: 5px;
+  }
   .unit-tiles label {
-    flex: 0 0 62px;
+    flex: 0 0 54px;
     min-height: 48px;
   }
   .unit-tiles select {
     min-height: 48px;
     flex: 0 0 auto;
-    width: 62px;
-    min-width: 62px;
+    width: 54px;
+    min-width: 54px;
   }
   .pos-field input,
   .expiry-box input,
